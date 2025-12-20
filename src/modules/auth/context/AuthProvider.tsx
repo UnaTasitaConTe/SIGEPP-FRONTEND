@@ -74,16 +74,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.setItem(TOKEN_KEY, response.token);
         setToken(response.token);
 
-        // Guardar usuario (la respuesta de login ya incluye los datos)
-        const userData: CurrentUser = {
-          userId: response.userId,
-          email: response.email,
-          name: response.name,
-          roles: response.roles,
-          permissions: response.permissions,
-        };
 
-        setUser(userData);
+        const currentUser = await authApi.getCurrentUser();
+     
+
+        setUser(currentUser);
 
         // Redirigir a dashboard
         router.push('/dashboard');

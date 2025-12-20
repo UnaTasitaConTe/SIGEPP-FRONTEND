@@ -52,7 +52,7 @@ export default function DashboardPage() {
           {user.name}
         </p>
         <p className="text-gray-600 text-sm mt-0.5">
-          Sistema de Gestión de Programas de Pago
+          Sistema de Gestión de Ppas
         </p>
       </div>
 
@@ -137,26 +137,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Próximos pasos */}
-      <Card className="border-dashed border-[#e30513]/30 shadow-sm rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-[#630b00] flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#e30513]" />
-            Próximos pasos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600">
-            En las próximas iteraciones se agregarán módulos de:
-          </p>
-          <ul className="mt-2 space-y-1 text-sm text-[#3c3c3b] list-disc list-inside">
-            <li>Gestión de PPAs (Programas de Pago)</li>
-            <li>Periodos Académicos</li>
-            <li>Materias y asignaciones</li>
-            <li>Reportes y estadísticas</li>
-          </ul>
-        </CardContent>
-      </Card>
+    
     </div>
   );
 }

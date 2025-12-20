@@ -144,9 +144,6 @@ export default function NewPpaPage() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-[#630b00]">Crear Nuevo PPA</h1>
-              <p className="text-sm text-[#3c3c3b]/60">
-                Programa de Posgrado Académico
-              </p>
             </div>
           </div>
         </div>

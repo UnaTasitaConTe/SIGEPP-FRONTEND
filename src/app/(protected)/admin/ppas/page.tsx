@@ -63,6 +63,7 @@ export default function AdminPpasPage() {
 
   // Verificar permisos
   const isAdmin = user?.roles?.includes('ADMIN');
+  const isConsultor = user?.roles?.includes('CONSULTA_INTERNA');
 
   // Filtrar PPAs según búsqueda y estado
   const filteredPpas = useMemo(() => {
@@ -113,7 +114,7 @@ export default function AdminPpasPage() {
   }
 
   // Verificar permisos de administrador
-  if (!isAdmin) {
+  if (!isAdmin && !isConsultor) {
     return (
       <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
         <div className="max-w-7xl mx-auto">
@@ -145,9 +146,6 @@ export default function AdminPpasPage() {
               <h1 className="text-3xl font-bold text-[#630b00]">
                 Administración de PPAs
               </h1>
-              <p className="text-sm text-[#3c3c3b]/60">
-                Gestiona y visualiza todos los Programas de Posgrado Académico
-              </p>
             </div>
           </div>
         </div>

@@ -89,9 +89,6 @@ export default function MisPpaPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-[#630b00]">Mis PPA</h1>
-                <p className="text-[#3c3c3b]/60">
-                  Programas de Posgrado Académico
-                </p>
               </div>
             </div>
 

@@ -190,9 +190,6 @@ export default function PpaDetailPage({ params }: PageProps) {
                 <h1 className="text-3xl font-bold text-[#630b00] mb-1">
                   {ppa.title}
                 </h1>
-                <p className="text-sm text-[#3c3c3b]/60">
-                  Detalle del Programa de Posgrado Académico
-                </p>
               </div>
             </div>
 

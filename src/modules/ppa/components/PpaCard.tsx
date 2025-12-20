@@ -31,13 +31,13 @@ export function PpaCard({ ppa }: PpaCardProps) {
           {/* Período académico */}
           <div className="flex items-center gap-2 text-sm text-[#3c3c3b]/70">
             <Calendar className="h-4 w-4 text-[#e30513]" />
-            <span>{ppa.academicPeriodName}</span>
+            <span>{ppa.academicPeriodId}</span>
           </div>
 
           {/* Docente */}
           <div className="flex items-center gap-2 text-sm text-[#3c3c3b]/70">
             <User className="h-4 w-4 text-[#e30513]" />
-            <span>{ppa.teacherName}</span>
+            <span>{ppa.teacherPrimaryName}</span>
           </div>
 
           {/* Fecha de creación */}

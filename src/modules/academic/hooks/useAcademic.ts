@@ -140,7 +140,7 @@ export function useUpdatePeriod() {
 
   return useMutation({
     mutationFn: (command: UpdateAcademicPeriodCommand) =>
-      updateAcademicPeriod(command),
+      updateAcademicPeriod(command.id, command),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: academicKeys.periodDetail(variables.id),
@@ -203,7 +203,7 @@ export function useUpdateSubject() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (command: UpdateSubjectCommand) => updateSubject(command),
+    mutationFn: (command: UpdateSubjectCommand) => updateSubject(command.id, command),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: academicKeys.subjectDetail(variables.id),
