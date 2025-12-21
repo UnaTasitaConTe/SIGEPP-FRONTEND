@@ -1,10 +1,12 @@
 /**
- * Página de edición de PPA
- * Ruta: /ppa/[id]/edit
+ * Página de edición de PPA para ADMINISTRADORES
+ * Ruta: /admin/ppa/[id]/edit
  *
- * Permite editar un PPA existente
- * NOTA: Solo se pueden editar título, descripción y objetivos.
- * El período, docente y asignaciones NO se pueden modificar.
+ * Permite al admin editar completamente un PPA:
+ * - Información básica (título, descripción, objetivos)
+ * - Cambiar docente responsable
+ * - Modificar asignaciones docentes
+ * - Agregar nuevos estudiantes
  */
 
 'use client';
@@ -14,14 +16,18 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { usePpaDetail, useUpdatePpa, EditPpaForm, type UpdatePpaFormData } from '@/modules/ppa';
+import { usePpaDetail, useUpdatePpa, AdminEditPpaForm } from '@/modules/ppa';
+import { useQuery } from '@tanstack/react-query';
+import { getUsers } from '@/modules/users';
+import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
 import { Button } from '@/components/ui/button';
+import type { UpdatePpaFormData } from '@/modules/ppa/schemas/ppa.schemas';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export default function EditPpaPage({ params }: PageProps) {
+export default function AdminEditPpaPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -35,17 +41,30 @@ export default function EditPpaPage({ params }: PageProps) {
 
   const updateMutation = useUpdatePpa();
 
+  // Obtener usuarios para selector de docente
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => getUsers(),
+    enabled: !!ppa, // Solo cargar si hay PPA
+  });
+
+  // Obtener asignaciones del período del PPA
+  const { data: assignments = [] } = useQuery({
+    queryKey: ['assignments-by-period', ppa?.academicPeriodId],
+    queryFn: () =>
+      ppa?.academicPeriodId
+        ? getAssignmentsByPeriod({ academicPeriodId: ppa.academicPeriodId })
+        : Promise.resolve([]),
+    enabled: !!ppa?.academicPeriodId,
+  });
+
+  // Filtrar solo docentes
+  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
+
   // Handler para enviar el formulario
   const handleSubmit = async (data: UpdatePpaFormData) => {
     try {
-      await updateMutation.mutateAsync({
-        id,
-        title: data.title,
-        description: data.description || null,
-        generalObjective: data.generalObjective || null,
-        specificObjectives: data.specificObjectives || null,
-        newStudents: data.newStudents
-      });
+      await updateMutation.mutateAsync(data);
 
       alert('PPA actualizado exitosamente');
       router.push(`/ppa/${id}`);
@@ -59,10 +78,8 @@ export default function EditPpaPage({ params }: PageProps) {
     }
   };
 
-  // Verificar permisos (el usuario debe ser el docente responsable o ADMIN)
-  const canEdit =
-    user?.roles?.includes('ADMIN') ||
-    (ppa && user?.userId === ppa.primaryTeacherId);
+  // Verificar permisos
+  const isAdmin = user?.roles?.includes('ADMIN');
 
   // Loading state
   if (isAuthLoading || isLoadingPpa) {
@@ -89,10 +106,10 @@ export default function EditPpaPage({ params }: PageProps) {
                 No se pudo cargar la información del PPA. Verifica que el ID sea
                 correcto o intenta más tarde.
               </p>
-              <Link href="/ppa">
+              <Link href="/admin/ppas">
                 <Button className="bg-[#e30513] hover:bg-[#9c0f06] text-white">
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Volver a Mis PPAs
+                  Volver a PPAs
                 </Button>
               </Link>
             </div>
@@ -103,22 +120,21 @@ export default function EditPpaPage({ params }: PageProps) {
   }
 
   // Check permissions
-  if (!canEdit) {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
         <div className="max-w-5xl mx-auto">
           <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-6 py-8 rounded-xl flex items-start gap-3">
             <AlertCircle className="h-6 w-6 flex-shrink-0 text-[#e30513]" />
             <div>
-              <h3 className="font-semibold text-lg mb-2">Acceso no autorizado</h3>
+              <h3 className="font-semibold text-lg mb-2">Acceso Denegado</h3>
               <p className="text-sm text-[#3c3c3b]/70 mb-4">
-                Solo el docente responsable o los administradores pueden editar
-                este PPA.
+                Solo los administradores pueden editar completamente los PPAs.
               </p>
               <Link href={`/ppa/${id}`}>
                 <Button className="bg-[#e30513] hover:bg-[#9c0f06] text-white">
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Volver al Detalle
+                  Ver PPA
                 </Button>
               </Link>
             </div>
@@ -131,41 +147,37 @@ export default function EditPpaPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
       <div className="max-w-5xl mx-auto">
-        {/* Header con navegación */}
+        {/* Header */}
         <div className="mb-6">
-          <Link href={`/ppa/${id}`}>
-            <Button
-              variant="ghost"
-              className="text-[#3c3c3b] hover:text-[#e30513] hover:bg-[#e30513]/5 mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver al Detalle
-            </Button>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#e30513] to-[#630b00] rounded-xl flex items-center justify-center">
-              <BookOpen className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-[#630b00]">Editar PPA</h1>
-              <p className="text-sm text-[#3c3c3b]/60">{ppa.title}</p>
+          <div className="flex items-center gap-3 mb-4">
+            <Link href={`/ppa/${id}`}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-[#3c3c3b]/30 text-[#3c3c3b] hover:bg-[#3c3c3b]/5"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2 text-[#e30513]">
+              <BookOpen className="h-6 w-6" />
+              <h1 className="text-2xl font-bold text-[#3c3c3b]">
+                Editar PPA (Administrador)
+              </h1>
             </div>
           </div>
-        </div>
-
-        {/* Nota informativa */}
-        <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg">
-          <p className="text-sm">
-            <strong>Nota:</strong> Solo puedes modificar el título, descripción y
-            objetivos. El período académico, docente responsable y asignaciones no
-            pueden modificarse una vez creado el PPA.
+          <p className="text-[#3c3c3b]/70 text-sm">
+            Como administrador, puedes editar todos los aspectos del PPA incluyendo el
+            docente responsable y las asignaciones.
           </p>
         </div>
 
         {/* Formulario */}
-        <EditPpaForm
+        <AdminEditPpaForm
           ppa={ppa}
+          teachers={teachers}
+          assignments={assignments}
           onSubmit={handleSubmit}
           onCancel={() => router.push(`/ppa/${id}`)}
           isSubmitting={updateMutation.isPending}

@@ -8,7 +8,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Save, X } from 'lucide-react';
+import { Loader2, Save, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,9 +22,11 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { PpaDetailDto } from '../types';
 import { TeacherAssignmentDto } from '@/modules/teacherAssignments';
+import { createPpaSchema, updatePpaSchema } from '../schemas/ppa.schemas';
+import { useState } from 'react';
 
-// Schema de validación alineado con OpenAPI
-const ppaFormSchema = z.object({
+// Schema de validación para modo creación (sin primaryTeacherId, con studentNames)
+const createFormSchema = z.object({
   title: z
     .string()
     .min(3, 'El título debe tener al menos 3 caracteres')
@@ -45,32 +47,74 @@ const ppaFormSchema = z.object({
     .optional()
     .nullable(),
   academicPeriodId: z.string().min(1, 'Selecciona un período académico'),
-  primaryTeacherId: z.string().min(1, 'Selecciona un docente responsable'),
   teacherAssignmentIds: z
     .array(z.string())
     .min(1, 'Selecciona al menos una asignación docente'),
+  studentNames: z.array(z.string()).optional(),
 });
 
-export type PpaFormData = z.infer<typeof ppaFormSchema>;
+// Schema para modo edición
+const editFormSchema = z.object({
+  id: z.string(),
+  title: z
+    .string()
+    .min(3, 'El título debe tener al menos 3 caracteres')
+    .max(300, 'El título no puede exceder 300 caracteres'),
+  description: z
+    .string()
+    .max(3000, 'La descripción no puede exceder 3000 caracteres')
+    .optional()
+    .nullable(),
+  generalObjective: z
+    .string()
+    .max(1000, 'El objetivo general no puede exceder 1000 caracteres')
+    .optional()
+    .nullable(),
+  specificObjectives: z
+    .string()
+    .max(2000, 'Los objetivos específicos no pueden exceder 2000 caracteres')
+    .optional()
+    .nullable(),
+  newResponsibleTeacherId: z.string().optional().nullable(),
+  newTeacherAssignmentIds: z.array(z.string()).optional().nullable(),
+  newStudentNames: z.array(z.string()).optional().nullable(),
+});
 
-interface PpaFormProps {
-  /** Datos iniciales para edición (opcional) */
-  initialData?: PpaDetailDto;
+// Tipos derivados de los schemas
+export type CreatePpaFormData = z.infer<typeof createFormSchema>;
+export type UpdatePpaFormData = z.infer<typeof editFormSchema>;
+export type PpaFormData = CreatePpaFormData | UpdatePpaFormData;
+
+// Props base compartidas
+interface PpaFormBaseProps {
   /** Períodos académicos disponibles */
   periods: Array<{ id: string; name: string; code?: string | null }>;
   /** Docentes disponibles */
   teachers: Array<{ id: string; name: string }>;
   /** Asignaciones docentes disponibles para el período seleccionado */
   assignments: Array<TeacherAssignmentDto>;
-  /** Callback al enviar el formulario */
-  onSubmit: (data: PpaFormData) => void | Promise<void>;
   /** Callback al cancelar */
   onCancel: () => void;
   /** Estado de envío */
   isSubmitting?: boolean;
-  /** Modo: create o edit */
-  mode: 'create' | 'edit';
 }
+
+// Props para modo creación
+interface PpaFormCreateProps extends PpaFormBaseProps {
+  mode: 'create';
+  initialData?: never;
+  onSubmit: (data: CreatePpaFormData) => void | Promise<void>;
+}
+
+// Props para modo edición
+interface PpaFormEditProps extends PpaFormBaseProps {
+  mode: 'edit';
+  initialData: PpaDetailDto;
+  onSubmit: (data: UpdatePpaFormData) => void | Promise<void>;
+}
+
+// Tipo unión de props
+type PpaFormProps = PpaFormCreateProps | PpaFormEditProps;
 
 export function PpaForm({
   initialData,
@@ -89,41 +133,46 @@ export function PpaForm({
     setValue,
     watch,
   } = useForm<PpaFormData>({
-    resolver: zodResolver(ppaFormSchema),
-    defaultValues: initialData
-      ? {
-          title: initialData.title,
-          description: initialData.description || '',
-          generalObjective: initialData.generalObjective || '',
-          specificObjectives: initialData.specificObjectives || '',
-          academicPeriodId: initialData.academicPeriodId,
-          primaryTeacherId: initialData.primaryTeacherId,
-          teacherAssignmentIds: initialData.teacherAssignmentIds || [],
-        }
-      : {
-          title: '',
-          description: '',
-          generalObjective: '',
-          specificObjectives: '',
-          academicPeriodId: '',
-          primaryTeacherId: '',
-          teacherAssignmentIds: [],
-        },
+    resolver: zodResolver(mode === 'create' ? createFormSchema : editFormSchema),
+    defaultValues:
+      mode === 'create'
+        ? {
+            title: '',
+            description: '',
+            generalObjective: '',
+            specificObjectives: '',
+            academicPeriodId: '',
+            teacherAssignmentIds: [],
+            studentNames: [],
+          }
+        : {
+            id: initialData?.id || '',
+            title: initialData?.title || '',
+            description: initialData?.description || '',
+            generalObjective: initialData?.generalObjective || '',
+            specificObjectives: initialData?.specificObjectives || '',
+            newResponsibleTeacherId: null,
+            newTeacherAssignmentIds: null,
+            newStudentNames: null,
+          },
   });
 
-  const selectedPeriod = watch('academicPeriodId');
-  const selectedTeacher = watch('primaryTeacherId');
-  const selectedAssignments = watch('teacherAssignmentIds') || [];
+  const selectedPeriod = mode === 'create' ? watch('academicPeriodId' as any) : '';
+  const selectedAssignments =
+    mode === 'create'
+      ? (watch('teacherAssignmentIds' as any) as string[] | undefined) || []
+      : (watch('newTeacherAssignmentIds' as any) as string[] | null | undefined) || initialData?.teacherAssignmentIds || [];
 
   const toggleAssignment = (assignmentId: string) => {
     const current = selectedAssignments;
+    const fieldName = mode === 'create' ? 'teacherAssignmentIds' : 'newTeacherAssignmentIds';
     if (current.includes(assignmentId)) {
       setValue(
-        'teacherAssignmentIds',
+        fieldName as any,
         current.filter((id) => id !== assignmentId)
       );
     } else {
-      setValue('teacherAssignmentIds', [...current, assignmentId]);
+      setValue(fieldName as any, [...current, assignmentId]);
     }
   };
 
@@ -273,9 +322,9 @@ export function PpaForm({
                 ))}
               </SelectContent>
             </Select>
-            {errors.academicPeriodId && (
+            {'academicPeriodId' in errors && errors.academicPeriodId && (
               <p className="text-sm text-[#e30513] mt-1">
-                {errors.academicPeriodId.message}
+                {errors.academicPeriodId?.message}
               </p>
             )}
             {mode === 'edit' && (
@@ -285,43 +334,48 @@ export function PpaForm({
             )}
           </div>
 
-          {/* Docente responsable */}
-          <div>
-            <Label htmlFor="teacher" className="text-[#3c3c3b] font-medium">
-              Docente Responsable *
-            </Label>
-            <Select
-              value={selectedTeacher}
-              onValueChange={(value) => setValue('primaryTeacherId', value)}
-              disabled={isSubmitting || mode === 'edit'}
-            >
-              <SelectTrigger
-                id="teacher"
-                className={`mt-1 border-[#3c3c3b]/20 focus:border-[#e30513] ${
-                  errors.primaryTeacherId ? 'border-[#e30513]' : ''
-                }`}
+          {/* Docente responsable - Solo en modo edición */}
+          {mode === 'edit' && (
+            <div>
+              <Label htmlFor="newResponsibleTeacherId" className="text-[#3c3c3b] font-medium">
+                Cambiar Docente Responsable (Opcional)
+              </Label>
+              <Select
+                value={watch('newResponsibleTeacherId') || ''}
+                onValueChange={(value) =>
+                  setValue('newResponsibleTeacherId', value || null)
+                }
+                disabled={isSubmitting}
               >
-                <SelectValue placeholder="Selecciona un docente" />
-              </SelectTrigger>
-              <SelectContent>
-                {teachers.map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.primaryTeacherId && (
-              <p className="text-sm text-[#e30513] mt-1">
-                {errors.primaryTeacherId.message}
-              </p>
-            )}
-            {mode === 'edit' && (
+                <SelectTrigger
+                  id="newResponsibleTeacherId"
+                  className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
+                >
+                  <SelectValue placeholder="Mantener responsable actual" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Mantener responsable actual</SelectItem>
+                  {teachers.map((teacher) => (
+                    <SelectItem key={teacher.id} value={teacher.id}>
+                      {teacher.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-[#3c3c3b]/60 mt-1">
-                El docente responsable no puede modificarse en modo edición
+                Responsable actual: {initialData?.primaryTeacherName || 'N/A'}
               </p>
-            )}
-          </div>
+            </div>
+          )}
+
+          {mode === 'create' && (
+            <div className="rounded-md bg-blue-50 p-3">
+              <p className="text-sm text-blue-800">
+                <strong>Nota:</strong> Serás asignado automáticamente como el docente
+                responsable de este PPA.
+              </p>
+            </div>
+          )}
 
           {/* Asignaciones docentes */}
           {mode === 'create' && (
@@ -361,9 +415,9 @@ export function PpaForm({
                   ))}
                 </div>
               )}
-              {errors.teacherAssignmentIds && (
+              {'teacherAssignmentIds' in errors && errors.teacherAssignmentIds && (
                 <p className="text-sm text-[#e30513] mt-1">
-                  {errors.teacherAssignmentIds.message}
+                  {errors.teacherAssignmentIds?.message}
                 </p>
               )}
               <p className="text-xs text-[#3c3c3b]/60 mt-1">
@@ -371,6 +425,49 @@ export function PpaForm({
               </p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Estudiantes */}
+      <Card className="bg-white rounded-xl shadow-sm border border-[#e30513]/20">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold text-[#630b00]">
+            Estudiantes (Opcional)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="studentNames" className="text-[#3c3c3b] font-medium">
+              Nombres de Estudiantes
+            </Label>
+            <textarea
+              id="studentNames"
+              placeholder="Ingrese nombres de estudiantes (uno por línea)"
+              className="mt-1 w-full px-3 py-2 border border-[#3c3c3b]/20 rounded-md focus:outline-none focus:border-[#e30513] min-h-[100px]"
+              disabled={isSubmitting}
+              defaultValue={
+                mode === 'create'
+                  ? ''
+                  : initialData
+                  ? []
+                      .join('\n')
+                  : ''
+              }
+              onChange={(e) => {
+                const names = e.target.value
+                  .split('\n')
+                  .map((n) => n.trim())
+                  .filter(Boolean);
+                setValue(
+                  mode === 'create' ? 'studentNames' : 'newStudentNames',
+                  names.length > 0 ? names : undefined
+                );
+              }}
+            />
+            <p className="text-xs text-[#3c3c3b]/60 mt-1">
+              Un nombre por línea
+            </p>
+          </div>
         </CardContent>
       </Card>
 

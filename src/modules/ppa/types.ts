@@ -39,7 +39,7 @@ export const NumberToPpaStatus: Record<number, PpaStatus> = {
 
 /**
  * Tipos de anexos que se pueden subir a un PPA
- * Backend: integer enum (0=PpaDocument, 1=TeacherAuthorization, 2=StudentAuthorization, 3=SourceCode, 4=Presentation, 5=Other)
+ * Backend: integer enum (0-7)
  * Frontend: usamos strings por conveniencia
  */
 export type PpaAttachmentType =
@@ -48,6 +48,8 @@ export type PpaAttachmentType =
   | 'StudentAuthorization'
   | 'SourceCode'
   | 'Presentation'
+  | 'Instrument'
+  | 'Evidence'
   | 'Other';
 
 /**
@@ -59,7 +61,9 @@ export const PpaAttachmentTypeToNumber: Record<PpaAttachmentType, number> = {
   StudentAuthorization: 2,
   SourceCode: 3,
   Presentation: 4,
-  Other: 5,
+  Instrument: 5,
+  Evidence: 6,
+  Other: 7,
 };
 
 /**
@@ -71,7 +75,9 @@ export const NumberToPpaAttachmentType: Record<number, PpaAttachmentType> = {
   2: 'StudentAuthorization',
   3: 'SourceCode',
   4: 'Presentation',
-  5: 'Other',
+  5: 'Instrument',
+  6: 'Evidence',
+  7: 'Other',
 };
 
 // ============================================================================
@@ -97,6 +103,8 @@ export const PpaAttachmentTypeLabels: Record<PpaAttachmentType, string> = {
   StudentAuthorization: 'Autorización Estudiante',
   SourceCode: 'Código Fuente',
   Presentation: 'Presentación',
+  Instrument: 'Instrumentos',
+  Evidence: 'Evidencias',
   Other: 'Otro',
 };
 
@@ -123,6 +131,26 @@ export interface PpaDto {
 }
 
 /**
+ * Detalle de asignación dentro de PpaDetailDto
+ */
+export interface AssignmentDetail {
+  teacherAssignmentId: string;
+  teacherId: string;
+  teacherName?: string | null;
+  subjectId: string;
+  subjectCode?: string | null;
+  subjectName?: string | null;
+}
+
+/**
+ * Estudiante dentro de PpaDetailDto
+ */
+export interface PpaStudent {
+  id?: string | null;
+  name: string;
+}
+
+/**
  * DTO detallado de PPA
  * GET /api/Ppa/{id}
  */
@@ -138,8 +166,68 @@ export interface PpaDetailDto {
   primaryTeacherId: string;
   primaryTeacherName?: string | null;
   teacherAssignmentIds: string[]; // IDs de las asignaciones
+  assignmentDetails: AssignmentDetail[]; // Detalles completos de las asignaciones
+  students: PpaStudent[]; // Lista de estudiantes con id y nombre
   createdAt: string;
   updatedAt?: string | null;
+  hasContinuation : boolean;
+  isContinuation : boolean;
+}
+
+/**
+ * DTO de resumen de PPA (incluye metadata adicional)
+ * GET /api/Ppa/my
+ */
+export interface PpaSummaryDto {
+  id: string;
+  title: string;
+  status: PpaStatus;
+  academicPeriodId: string;
+  academicPeriodCode?: string | null;
+  responsibleTeacherId: string;
+  responsibleTeacherName?: string | null;
+  assignmentsCount: number;
+  studentsCount: number;
+  isContinuation: boolean;
+  hasContinuation: boolean;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+/**
+ * Tipo para el enum de acciones en el historial
+ * Backend: integer enum (0-12)
+ */
+export type PpaHistoryActionType =
+  | 'Created'
+  | 'UpdatedTitle'
+  | 'ChangedStatus'
+  | 'ChangedResponsibleTeacher'
+  | 'UpdatedAssignments'
+  | 'UpdatedStudents'
+  | 'UpdatedContinuationSettings'
+  | 'AttachmentAdded'
+  | 'AttachmentRemoved'
+  | 'ContinuationCreated'
+  | 'UpdatedGeneralObjective'
+  | 'UpdatedSpecificObjectives'
+  | 'UpdatedDescription';
+
+/**
+ * DTO de entrada en el historial de un PPA
+ * GET /api/Ppa/{id}/history
+ */
+export interface PpaHistoryDto {
+  id: string;
+  ppaId: string;
+  performedByUserId: string;
+  performedByUserName?: string | null;
+  performedAt: string;
+  actionType: PpaHistoryActionType;
+  actionTypeDescription: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  notes?: string | null;
 }
 
 /**
@@ -172,8 +260,8 @@ export interface CreatePpaCommand {
   generalObjective?: string | null; // maxLength: 1000
   specificObjectives?: string | null; // maxLength: 2000
   academicPeriodId: string; // UUID
-  primaryTeacherId: string; // UUID
   teacherAssignmentIds: string[]; // minItems: 1
+  studentNames?: string[]; // opcional
 }
 
 /**
@@ -186,6 +274,22 @@ export interface UpdatePpaCommand {
   description?: string | null; // maxLength: 3000
   generalObjective?: string | null; // maxLength: 1000
   specificObjectives?: string | null; // maxLength: 2000
+  newResponsibleTeacherId?: string | null; // UUID
+  newTeacherAssignmentIds?: string[] | null;
+  newStudents?: PpaStudent[] | null; // Array de objetos con id (opcional) y name
+}
+
+/**
+ * Comando para continuar un PPA en un nuevo período
+ * POST /api/Ppa/{id}/continue
+ */
+export interface ContinuePpaCommand {
+  sourcePpaId: string; // UUID
+  targetAcademicPeriodId: string; // UUID
+  newTitle?: string | null; // 3-300 chars si presente
+  newResponsibleTeacherId?: string | null; // UUID
+  teacherAssignmentIds: string[]; // minItems: 1
+  studentNames?: string[];
 }
 
 /**

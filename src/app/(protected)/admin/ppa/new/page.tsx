@@ -1,8 +1,15 @@
 /**
- * Página de creación de PPA
- * Ruta: /ppa/new
+ * Página de creación de PPA para ADMINISTRADORES
+ * Ruta: /admin/ppa/new
  *
- * Permite crear un nuevo PPA (solo ADMIN o DOCENTE)
+ * Permite al admin crear un PPA seleccionando:
+ * - Docente responsable
+ * - Período académico
+ * - Asignaciones docentes
+ * - Estudiantes
+ *
+ * NOTA: Debido a limitación del backend (CreatePpaCommand no tiene primaryTeacherId),
+ * se implementa un workaround: crear + editar inmediatamente para asignar responsable.
  */
 
 'use client';
@@ -13,12 +20,19 @@ import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { useAcademicPeriods, useActivePeriod } from '@/modules/academic';
-import { useCreatePpa, CreatePpaForm, type CreatePpaFormData } from '@/modules/ppa';
+import { useCreatePpa, useUpdatePpa, AdminCreatePpaForm } from '@/modules/ppa';
 import { useQuery } from '@tanstack/react-query';
+import { getUsers } from '@/modules/users';
 import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
 import { Button } from '@/components/ui/button';
+import type { CreatePpaFormData } from '@/modules/ppa/schemas/ppa.schemas';
 
-export default function NewPpaPage() {
+// Tipo extendido que incluye responsibleTeacherId
+interface AdminCreatePpaFormData extends CreatePpaFormData {
+  responsibleTeacherId?: string;
+}
+
+export default function AdminNewPpaPage() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
@@ -26,8 +40,13 @@ export default function NewPpaPage() {
   // Hooks de React Query
   const { data: periods = [] } = useAcademicPeriods();
   const { data: activePeriod } = useActivePeriod();
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => getUsers(),
+  });
 
   const createMutation = useCreatePpa();
+  const updateMutation = useUpdatePpa();
 
   // Obtener asignaciones del período seleccionado
   const { data: assignments = [] } = useQuery({
@@ -48,10 +67,14 @@ export default function NewPpaPage() {
     }
   }, [activePeriod, periods, selectedPeriodId]);
 
+  // Filtrar solo docentes
+  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
+
   // Handler para enviar el formulario
-  const handleSubmit = async (data: CreatePpaFormData) => {
+  const handleSubmit = async (data: AdminCreatePpaFormData) => {
     try {
-      await createMutation.mutateAsync({
+      // Paso 1: Crear el PPA (el backend asigna al usuario actual como responsable)
+      const createResult = await createMutation.mutateAsync({
         title: data.title,
         description: data.description || null,
         generalObjective: data.generalObjective || null,
@@ -61,8 +84,22 @@ export default function NewPpaPage() {
         studentNames: data.studentNames || [],
       });
 
+      // Paso 2: Si se seleccionó un docente responsable diferente, actualizar
+      if (data.responsibleTeacherId && createResult?.id) {
+        await updateMutation.mutateAsync({
+          id: createResult.id,
+          title: data.title,
+          description: data.description || null,
+          generalObjective: data.generalObjective || null,
+          specificObjectives: data.specificObjectives || null,
+          newResponsibleTeacherId: data.responsibleTeacherId,
+          newTeacherAssignmentIds: null,
+          newStudentNames: null,
+        });
+      }
+
       alert('PPA creado exitosamente');
-      router.push('/ppa');
+      router.push('/admin/ppas');
     } catch (error) {
       console.error('Error al crear PPA:', error);
       alert(
@@ -74,8 +111,7 @@ export default function NewPpaPage() {
   };
 
   // Verificar permisos
-  const canCreate =
-    user?.roles?.includes('ADMIN') || user?.roles?.includes('DOCENTE');
+  const isAdmin = user?.roles?.includes('ADMIN');
 
   // Loading state
   if (isAuthLoading) {
@@ -90,16 +126,16 @@ export default function NewPpaPage() {
   }
 
   // Check permissions
-  if (!canCreate) {
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
         <div className="max-w-5xl mx-auto">
           <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-6 py-8 rounded-xl flex items-start gap-3">
             <AlertCircle className="h-6 w-6 flex-shrink-0 text-[#e30513]" />
             <div>
-              <h3 className="font-semibold text-lg mb-2">Acceso no autorizado</h3>
+              <h3 className="font-semibold text-lg mb-2">Acceso Denegado</h3>
               <p className="text-sm text-[#3c3c3b]/70 mb-4">
-                Solo los administradores y docentes pueden crear PPAs.
+                Solo los administradores pueden crear PPAs para otros docentes.
               </p>
               <Link href="/ppa">
                 <Button className="bg-[#e30513] hover:bg-[#9c0f06] text-white">
@@ -117,35 +153,39 @@ export default function NewPpaPage() {
   return (
     <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
       <div className="max-w-5xl mx-auto">
-        {/* Header con navegación */}
+        {/* Header */}
         <div className="mb-6">
-          <Link href="/ppa">
-            <Button
-              variant="ghost"
-              className="text-[#3c3c3b] hover:text-[#e30513] hover:bg-[#e30513]/5 mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver a Mis PPAs
-            </Button>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#e30513] to-[#630b00] rounded-xl flex items-center justify-center">
-              <BookOpen className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-[#630b00]">Crear Nuevo PPA</h1>
+          <div className="flex items-center gap-3 mb-4">
+            <Link href="/admin/ppas">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-[#3c3c3b]/30 text-[#3c3c3b] hover:bg-[#3c3c3b]/5"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+            </Link>
+            <div className="flex items-center gap-2 text-[#e30513]">
+              <BookOpen className="h-6 w-6" />
+              <h1 className="text-2xl font-bold text-[#3c3c3b]">
+                Crear PPA (Administrador)
+              </h1>
             </div>
           </div>
+          <p className="text-[#3c3c3b]/70 text-sm">
+            Como administrador, puedes crear un PPA y asignar el docente responsable.
+          </p>
         </div>
 
         {/* Formulario */}
-        <CreatePpaForm
+        <AdminCreatePpaForm
           periods={periods}
+          teachers={teachers}
           assignments={assignments}
           onSubmit={handleSubmit}
-          onCancel={() => router.push('/ppa')}
-          isSubmitting={createMutation.isPending}
+          onCancel={() => router.push('/admin/ppas')}
+          isSubmitting={createMutation.isPending || updateMutation.isPending}
         />
       </div>
     </div>

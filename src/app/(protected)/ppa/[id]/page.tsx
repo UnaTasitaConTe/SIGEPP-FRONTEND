@@ -8,7 +8,8 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
@@ -21,6 +22,9 @@ import {
   GraduationCap,
   Edit,
   RefreshCw,
+  GitBranch,
+  History as HistoryIcon,
+  Paperclip,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
@@ -31,10 +35,13 @@ import {
   useChangePpaStatus,
   PpaStatusLabels,
   type PpaStatus,
+  type PpaSummaryDto,
 } from '@/modules/ppa';
 import { PpaStatusBadge } from '@/modules/ppa/components/PpaStatusBadge';
 import { PpaAttachmentsSection } from '@/modules/ppa/components/PpaAttachmentsSection';
 import { UploadAttachmentForm } from '@/modules/ppa/components/UploadAttachmentForm';
+import { PpaHistory } from '@/modules/ppa/components/PpaHistory';
+import { ContinuePpaDialog } from '@/modules/ppa/components/ContinuePpaDialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
@@ -45,6 +52,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { PpaAttachmentDto } from '@/modules/ppa/types';
+import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
+import { getUsers } from '@/modules/users';
+import { getAcademicPeriods } from '@/modules/academic';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -52,9 +62,13 @@ interface PageProps {
 
 export default function PpaDetailPage({ params }: PageProps) {
   const { id } = use(params);
+  const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'attachments' | 'history'>('details');
+  const [showContinueDialog, setShowContinueDialog] = useState(false);
+  const [selectedPeriodForContinue, setSelectedPeriodForContinue] = useState<string>('');
 
   // Obtener detalle del PPA usando el hook
   const {
@@ -62,6 +76,32 @@ export default function PpaDetailPage({ params }: PageProps) {
     isLoading: isLoadingPpa,
     error: ppaError,
   } = usePpaDetail(id);
+
+  // Obtener períodos académicos para el diálogo de continuar PPA
+  const { data: periods = [] } = useQuery({
+    queryKey: ['academic-periods'],
+    queryFn: () => getAcademicPeriods(),
+    enabled: showContinueDialog,
+  });
+
+  // Obtener asignaciones del período seleccionado para continuar
+  const { data: assignmentsForContinue = [] } = useQuery({
+    queryKey: ['assignments-by-period', selectedPeriodForContinue],
+    queryFn: () =>
+      selectedPeriodForContinue
+        ? getAssignmentsByPeriod({ academicPeriodId: selectedPeriodForContinue })
+        : Promise.resolve([]),
+    enabled: showContinueDialog && !!selectedPeriodForContinue,
+  });
+
+  // Obtener docentes disponibles (solo para admins)
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => getUsers(),
+    enabled: showContinueDialog ,
+  });
+
+  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
   // Obtener anexos del PPA usando el hook
   const {
@@ -193,8 +233,32 @@ export default function PpaDetailPage({ params }: PageProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <PpaStatusBadge status={ppa.status} />
+
+              {ppa.isContinuation && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <GitBranch className="h-3 w-3 mr-1" />
+                  Continuación
+                </span>
+              )}
+
+              {ppa.hasContinuation && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Tiene continuación
+                </span>
+              )}
+
+              {canEdit && ppa.status === 'Completed' && !ppa.hasContinuation && (
+                <Button
+                  onClick={() => setShowContinueDialog(true)}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <GitBranch className="mr-2 h-4 w-4" />
+                  Continuar PPA
+                </Button>
+              )}
 
               {canEdit && (
                 <Link href={`/ppa/${id}/edit`}>
@@ -274,8 +338,72 @@ export default function PpaDetailPage({ params }: PageProps) {
           </Card>
         )}
 
-        {/* Información general del PPA */}
-        <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
+        {/* Tabs de navegación */}
+        <div className="mb-6 border-b border-[#3c3c3b]/10">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === 'details'
+                  ? 'text-[#e30513]'
+                  : 'text-[#3c3c3b]/60 hover:text-[#3c3c3b]'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Detalles
+              </span>
+              {activeTab === 'details' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#e30513]" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('attachments')}
+              className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === 'attachments'
+                  ? 'text-[#e30513]'
+                  : 'text-[#3c3c3b]/60 hover:text-[#3c3c3b]'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4" />
+                Anexos
+                {attachments && attachments.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-[#e30513]/10 text-[#e30513] rounded-full">
+                    {attachments.length}
+                  </span>
+                )}
+              </span>
+              {activeTab === 'attachments' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#e30513]" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === 'history'
+                  ? 'text-[#e30513]'
+                  : 'text-[#3c3c3b]/60 hover:text-[#3c3c3b]'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <HistoryIcon className="h-4 w-4" />
+                Historial
+              </span>
+              {activeTab === 'history' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#e30513]" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Tab: Detalles */}
+        {activeTab === 'details' && (
+          <>
+            {/* Información general del PPA */}
+            <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-[#630b00]">
               Información General
@@ -361,90 +489,180 @@ export default function PpaDetailPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
-        {/* Asignaciones de docente */}
-        {ppa.teacherAssignmentIds && ppa.teacherAssignmentIds.length > 0 && (
-          <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-[#630b00] flex items-center gap-2">
-                <GraduationCap className="h-5 w-5 text-[#e30513]" />
-                Asignaciones Docentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-[#3c3c3b]/70">
-                Este PPA incluye{' '}
-                <span className="font-semibold text-[#630b00]">
-                  {ppa.teacherAssignmentIds.length}
-                </span>{' '}
-                {ppa.teacherAssignmentIds.length === 1
-                  ? 'asignación docente'
-                  : 'asignaciones docentes'}
-              </p>
-            </CardContent>
-          </Card>
+            {/* Asignaciones de docente */}
+            {ppa.assignmentDetails && ppa.assignmentDetails.length > 0 && (
+              <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-[#630b00] flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5 text-[#e30513]" />
+                    Asignaciones Docentes ({ppa.assignmentDetails.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {ppa.assignmentDetails.map((assignment, index) => (
+                      <div
+                        key={assignment.teacherAssignmentId}
+                        className="p-4 rounded-lg bg-[#f2f2f2] border border-[#3c3c3b]/10 hover:border-[#e30513]/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#e30513]/10 text-[#e30513] text-xs font-bold">
+                                {index + 1}
+                              </span>
+                              <h3 className="font-semibold text-[#630b00]">
+                                {assignment.subjectCode ? `${assignment.subjectCode} - ` : ''}
+                                {assignment.subjectName || 'Materia sin nombre'}
+                              </h3>
+                            </div>
+
+                            {assignment.teacherName && (
+                              <div className="flex items-center gap-2 ml-8 text-sm text-[#3c3c3b]/70">
+                                <User className="h-3.5 w-3.5" />
+                                <span>{assignment.teacherName}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Estudiantes */}
+            {ppa.students && ppa.students.length > 0 && (
+              <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-[#630b00] flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5 text-[#e30513]" />
+                    Estudiantes Participantes ({ppa.students.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {ppa.students.map((student, index) => (
+                      <div
+                        key={student.id || `student-${index}`}
+                        className="p-3 rounded-lg bg-[#f2f2f2] border border-[#3c3c3b]/10 hover:border-[#e30513]/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-[#e30513] to-[#630b00] flex items-center justify-center text-white text-sm font-semibold">
+                            {student.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[#3c3c3b] truncate">
+                              {student.name}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Información de auditoría */}
+            <div className="mt-8 pt-6 border-t border-[#3c3c3b]/10">
+              <div className="flex flex-wrap gap-6 text-xs text-[#3c3c3b]/60">
+                <div>
+                  <span className="font-medium">Creado:</span>{' '}
+                  {new Date(ppa.createdAt).toLocaleString('es-ES', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+                {ppa.updatedAt && (
+                  <div>
+                    <span className="font-medium">Última actualización:</span>{' '}
+                    {new Date(ppa.updatedAt).toLocaleString('es-ES', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
-        {/* Formulario de subida de anexos (solo para DOCENTE y ADMIN) */}
-        {canUploadAttachments && (
-          <div className="mb-6">
-            <UploadAttachmentForm
-              ppaId={id}
-              onUploadSuccess={handleUploadSuccess}
-            />
-          </div>
-        )}
-
-        {/* Sección de anexos */}
-        <div>
-          <h2 className="text-xl font-bold text-[#630b00] mb-4 flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#e30513]" />
-            Anexos del PPA
-          </h2>
-
-          {isLoadingAttachments ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-[#e30513]" />
-            </div>
-          ) : attachmentsError ? (
-            <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-4 py-3 rounded-xl flex items-start gap-2">
-              <AlertCircle className="h-5 w-5 flex-shrink-0 text-[#e30513]" />
-              <p className="text-sm">Error al cargar anexos</p>
-            </div>
-          ) : (
-            <PpaAttachmentsSection
-              attachments={attachments}
-              onDownload={handleDownloadAttachment}
-            />
-          )}
-        </div>
-
-        {/* Información de auditoría */}
-        <div className="mt-8 pt-6 border-t border-[#3c3c3b]/10">
-          <div className="flex flex-wrap gap-6 text-xs text-[#3c3c3b]/60">
-            <div>
-              <span className="font-medium">Creado:</span>{' '}
-              {new Date(ppa.createdAt).toLocaleString('es-ES', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </div>
-            {ppa.updatedAt && (
-              <div>
-                <span className="font-medium">Última actualización:</span>{' '}
-                {new Date(ppa.updatedAt).toLocaleString('es-ES', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+        {/* Tab: Anexos */}
+        {activeTab === 'attachments' && (
+          <>
+            {/* Formulario de subida de anexos (solo para DOCENTE y ADMIN) */}
+            {canUploadAttachments && (
+              <div className="mb-6">
+                <UploadAttachmentForm
+                  ppaId={id}
+                  onUploadSuccess={handleUploadSuccess}
+                />
               </div>
             )}
+
+            {/* Sección de anexos */}
+            <div>
+              <h2 className="text-xl font-bold text-[#630b00] mb-4 flex items-center gap-2">
+                <Paperclip className="h-5 w-5 text-[#e30513]" />
+                Anexos del PPA
+              </h2>
+
+              {isLoadingAttachments ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#e30513]" />
+                </div>
+              ) : attachmentsError ? (
+                <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-4 py-3 rounded-xl flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 text-[#e30513]" />
+                  <p className="text-sm">Error al cargar anexos</p>
+                </div>
+              ) : (
+                <PpaAttachmentsSection
+                  attachments={attachments}
+                  onDownload={handleDownloadAttachment}
+                />
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Tab: Historial */}
+        {activeTab === 'history' && (
+          <div>
+            <h2 className="text-xl font-bold text-[#630b00] mb-4 flex items-center gap-2">
+              <HistoryIcon className="h-5 w-5 text-[#e30513]" />
+              Historial de Cambios
+            </h2>
+            <PpaHistory ppaId={id} />
           </div>
-        </div>
+        )}
+
+        {/* Dialog para continuar PPA */}
+        <ContinuePpaDialog
+          ppa={ppa as unknown as PpaSummaryDto}
+          isOpen={showContinueDialog}
+          onClose={() => {
+            setShowContinueDialog(false);
+            setSelectedPeriodForContinue('');
+          }}
+          onSuccess={(newPpaId) => {
+            setShowContinueDialog(false);
+            setSelectedPeriodForContinue('');
+            router.push(`/ppa/${newPpaId}`);
+          }}
+          periods={periods}
+          assignments={assignmentsForContinue}
+          teachers={isAdmin ? teachers : undefined}
+          onPeriodChange={setSelectedPeriodForContinue}
+        />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Upload, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, Loader2, AlertCircle, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { PpaAttachmentType } from '../types';
 import { PpaAttachmentTypeLabels } from '../types';
+import { validateFile, formatFileSize, FILE_UPLOAD_CONFIG } from '../schemas/ppa.schemas';
 
 // Schema de validación
 const uploadSchema = z.object({
@@ -62,6 +63,14 @@ export function UploadAttachmentForm({
 
     try {
       const file = data.file[0];
+
+      // Validar archivo ANTES de subir
+      const validationResult = validateFile(file);
+      if (!validationResult.valid) {
+        setError(validationResult.error || 'Archivo inválido');
+        setIsUploading(false);
+        return;
+      }
 
       // Importar dinámicamente para evitar problemas de SSR
       const { uploadPpaAttachment } = await import('../api');
@@ -177,9 +186,15 @@ export function UploadAttachmentForm({
             {errors.file && (
               <p className="text-sm text-[#e30513]">{errors.file.message}</p>
             )}
-            <p className="text-xs text-[#3c3c3b]/60">
-              Formatos permitidos: PDF, Word, Excel, ZIP, imágenes
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-[#3c3c3b]/60 flex items-center gap-1">
+                <FileCheck className="h-3 w-3" />
+                Formatos: PDF, Word (.doc, .docx), Excel (.xls, .xlsx), PowerPoint (.ppt, .pptx), imágenes (JPG, PNG), ZIP
+              </p>
+              <p className="text-xs text-[#3c3c3b]/60">
+                Tamaño máximo: {FILE_UPLOAD_CONFIG.MAX_SIZE_MB} MB
+              </p>
+            </div>
           </div>
 
           {/* Botón de submit */}

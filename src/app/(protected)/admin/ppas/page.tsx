@@ -76,7 +76,7 @@ export default function AdminPpasPage() {
         (ppa) =>
           ppa.title.toLowerCase().includes(search) ||
           ppa.description?.toLowerCase().includes(search) ||
-          ppa.primaryTeacherId.toLowerCase().includes(search)
+          ppa.teacherPrimaryName?.toLowerCase().includes(search)
       );
     }
 

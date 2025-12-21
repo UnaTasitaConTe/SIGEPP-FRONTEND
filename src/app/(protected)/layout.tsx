@@ -10,7 +10,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, Loader2, LayoutDashboard, Users, BookOpen, Calendar, UserCog, FileText, FolderOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LogOut, User, Loader2, LayoutDashboard, Users, BookOpen, Calendar, UserCog, FileText, FolderOpen, ChevronLeft, ChevronRight, FilePlus } from 'lucide-react';
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
@@ -73,6 +73,12 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
       label: 'Todos los PPAs',
       icon: FolderOpen,
       show: isAdmin || isConsultor,
+    },
+    {
+      href: '/admin/ppa/new',
+      label: 'Crear PPA',
+      icon: FilePlus,
+      show: isAdmin,
     },
     {
       href: '/users',

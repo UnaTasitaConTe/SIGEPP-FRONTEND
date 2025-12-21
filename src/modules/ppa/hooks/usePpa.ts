@@ -7,10 +7,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
   PpaDto,
   PpaDetailDto,
+  PpaSummaryDto,
+  PpaHistoryDto,
   PpaAttachmentDto,
   CreatePpaCommand,
   UpdatePpaCommand,
   ChangePpaStatusCommand,
+  ContinuePpaCommand,
   AddPpaAttachmentRequest,
   PpaAttachmentType,
 } from '../types';
@@ -18,9 +21,12 @@ import {
   getPpasByTeacher,
   getPpasByPeriod,
   getPpaById,
+  getMyPpas,
+  getPpaHistory,
   createPpa,
   updatePpa,
   changePpaStatus,
+  continuePpa,
   getPpaAttachments,
   getPpaAttachmentsByType,
   addPpaAttachment,
@@ -41,8 +47,11 @@ export const ppaKeys = {
     [...ppaKeys.lists(), { teacherId, academicPeriodId }] as const,
   byPeriod: (academicPeriodId: string) =>
     [...ppaKeys.lists(), { academicPeriodId }] as const,
+  my: (academicPeriodId?: string) =>
+    [...ppaKeys.lists(), 'my', academicPeriodId] as const,
   details: () => [...ppaKeys.all, 'detail'] as const,
   detail: (id: string) => [...ppaKeys.details(), id] as const,
+  history: (id: string) => [...ppaKeys.all, 'history', id] as const,
   attachments: (ppaId: string) => [...ppaKeys.all, 'attachments', ppaId] as const,
   attachmentsByType: (ppaId: string, type: PpaAttachmentType) =>
     [...ppaKeys.attachments(ppaId), type] as const,
@@ -81,6 +90,27 @@ export function usePpaDetail(id: string) {
   return useQuery({
     queryKey: ppaKeys.detail(id),
     queryFn: () => getPpaById(id),
+    enabled: !!id,
+  });
+}
+
+/**
+ * Hook para obtener los PPAs del usuario autenticado
+ */
+export function useMyPpas(academicPeriodId?: string) {
+  return useQuery({
+    queryKey: ppaKeys.my(academicPeriodId),
+    queryFn: () => getMyPpas(academicPeriodId),
+  });
+}
+
+/**
+ * Hook para obtener el historial de cambios de un PPA
+ */
+export function usePpaHistory(id: string) {
+  return useQuery({
+    queryKey: ppaKeys.history(id),
+    queryFn: () => getPpaHistory(id),
     enabled: !!id,
   });
 }
@@ -154,6 +184,25 @@ export function useChangePpaStatus() {
     mutationFn: (command: ChangePpaStatusCommand) => changePpaStatus(command),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ppaKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: ppaKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Hook para continuar un PPA en un nuevo período académico
+ */
+export function useContinuePpa() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (command: ContinuePpaCommand) => continuePpa(command),
+    onSuccess: (_, variables) => {
+      // Invalidar el detalle del PPA origen (ahora hasContinuation = true)
+      queryClient.invalidateQueries({
+        queryKey: ppaKeys.detail(variables.sourcePpaId),
+      });
+      // Invalidar todos los listados
       queryClient.invalidateQueries({ queryKey: ppaKeys.lists() });
     },
   });

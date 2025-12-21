@@ -7,12 +7,15 @@ import { apiClient } from '@/lib/apiClient';
 import type {
   PpaDto,
   PpaDetailDto,
+  PpaSummaryDto,
+  PpaHistoryDto,
   PpaAttachmentDto,
   AddPpaAttachmentRequest,
   FileUploadResult,
   CreatePpaCommand,
   UpdatePpaCommand,
   ChangePpaStatusCommand,
+  ContinuePpaCommand,
   PpaAttachmentType,
 } from './types';
 import {
@@ -110,6 +113,52 @@ export async function changePpaStatus(
   };
 
   return apiClient.post<void>(`/api/Ppa/${command.id}/status`, payload);
+}
+
+/**
+ * Obtiene los PPAs del usuario autenticado
+ * GET /api/Ppa/my?academicPeriodId={academicPeriodId}
+ *
+ * @param academicPeriodId - Opcional. Si se omite, retorna PPAs de todos los períodos
+ */
+export async function getMyPpas(
+  academicPeriodId?: string
+): Promise<PpaSummaryDto[]> {
+  const url = academicPeriodId
+    ? `/api/Ppa/my?academicPeriodId=${academicPeriodId}`
+    : '/api/Ppa/my';
+
+  const response = await apiClient.get<any[]>(url);
+
+  // Convertir status de number a string
+  return response.map((ppa) => ({
+    ...ppa,
+    status: NumberToPpaStatus[ppa.status] || 'Proposal',
+  }));
+}
+
+/**
+ * Obtiene el historial de cambios de un PPA
+ * GET /api/Ppa/{id}/history
+ */
+export async function getPpaHistory(id: string): Promise<PpaHistoryDto[]> {
+  // El historial no necesita conversión de status
+  return apiClient.get<PpaHistoryDto[]>(`/api/Ppa/${id}/history`);
+}
+
+/**
+ * Continúa un PPA en un nuevo período académico
+ * POST /api/Ppa/{id}/continue
+ *
+ * @returns Respuesta con ID del nuevo PPA creado
+ */
+export async function continuePpa(
+  command: ContinuePpaCommand
+): Promise<{ id: string; message: string }> {
+  return apiClient.post<{ id: string; message: string }>(
+    `/api/Ppa/${command.sourcePpaId}/continue`,
+    command
+  );
 }
 
 // ============================================================================
