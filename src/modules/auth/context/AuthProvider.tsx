@@ -8,7 +8,6 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '../api';
-import { UnauthorizedError } from '@/lib/apiClient';
 import type { CurrentUser } from '../types';
 
 const TOKEN_KEY = 'auth_token';
@@ -95,7 +94,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);
-    router.push('/login');
+    location.href = '/login'
   }, [router]);
 
   const value: AuthContextValue = {

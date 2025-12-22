@@ -123,8 +123,8 @@ export { EditPpaForm } from './components/EditPpaForm';
 export { AdminCreatePpaForm } from './components/AdminCreatePpaForm';
 export { AdminEditPpaForm } from './components/AdminEditPpaForm';
 // Mantener compatibilidad con código existente
-export { PpaForm } from './components/PpaForm';
-export type { PpaFormData } from './components/PpaForm';
+// export { PpaForm } from './components/PpaForm';
+// export type { PpaFormData } from './components/PpaForm';
 // Otros componentes
 export { PpaHistory } from './components/PpaHistory';
 export { ContinuePpaDialog } from './components/ContinuePpaDialog';
