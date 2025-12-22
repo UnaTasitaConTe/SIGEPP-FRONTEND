@@ -5,21 +5,24 @@ export enum PpaStatus {
   Proposal = 0,      // Propuesta inicial
   InProgress = 1,    // En desarrollo activo
   Completed = 2,     // Finalizado
-  Archived = 3       // Archivado (estado terminal)
+  Archived = 3,
+  InContinuing = 4      // Archivado (estado terminal)
 }
 
 export const PpaStatusLabels: Record<PpaStatus, string> = {
   [PpaStatus.Proposal]: 'Propuesta',
   [PpaStatus.InProgress]: 'En Progreso',
   [PpaStatus.Completed]: 'Completado',
-  [PpaStatus.Archived]: 'Archivado'
+  [PpaStatus.Archived]: 'Archivado',
+  [PpaStatus.InContinuing] : 'En continuación'
 };
 
 export const PpaStatusColors: Record<PpaStatus, string> = {
   [PpaStatus.Proposal]: 'bg-[#9c0f06] text-white',      // Rojo oscuro
   [PpaStatus.InProgress]: 'bg-[#e30513] text-white',     // Rojo principal
   [PpaStatus.Completed]: 'bg-[#3c3c3b] text-white',      // Gris oscuro
-  [PpaStatus.Archived]: 'bg-[#630b00] text-white'        // Vino/marrón
+  [PpaStatus.Archived]: 'bg-[#630b00] text-white',        // Vino/marrón
+ [PpaStatus.InContinuing] : 'bg-[#f2f2f2] text-[#630b00] border border-[#630b00]/30'
 };
 
 export enum PpaHistoryActionType {

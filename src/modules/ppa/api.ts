@@ -13,7 +13,9 @@ import type {
   AddPpaAttachmentRequest,
   FileUploadResult,
   CreatePpaCommand,
+  CreatePpaAdminCommand,
   UpdatePpaCommand,
+  UpdatePpaAdminCommand,
   ChangePpaStatusCommand,
   ContinuePpaCommand,
   PpaAttachmentType,
@@ -92,11 +94,29 @@ export async function createPpa(command: CreatePpaCommand): Promise<void> {
 }
 
 /**
+ * Crea un nuevo PPA como ADMIN
+ * POST /api/Ppa/admin
+ * Permite especificar el docente responsable directamente
+ */
+export async function createPpaAsAdmin(command: CreatePpaAdminCommand): Promise<void> {
+  return apiClient.post<void>('/api/Ppa/admin', command);
+}
+
+/**
  * Actualiza un PPA existente
  * PUT /api/Ppa/{id}
  */
 export async function updatePpa(command: UpdatePpaCommand): Promise<void> {
   return apiClient.put<void>(`/api/Ppa/${command.id}`, command);
+}
+
+/**
+ * Actualiza un PPA existente como ADMIN
+ * PUT /api/Ppa/admin/{id}
+ * Permite control completo sobre el PPA
+ */
+export async function updatePpaAsAdmin(command: UpdatePpaAdminCommand): Promise<void> {
+  return apiClient.put<void>(`/api/Ppa/admin/${command.id}`, command);
 }
 
 /**
@@ -236,6 +256,61 @@ export async function addPpaAttachment(
  */
 export async function deletePpaAttachment(id: string): Promise<void> {
   return apiClient.delete<void>(`/api/PpaAttachments/${id}`);
+}
+
+/**
+ * Descarga un anexo de PPA directamente
+ * GET /api/PpaAttachments/download/{attachmentId}
+ *
+ * Este endpoint retorna el archivo directamente con los headers correctos.
+ * El navegador maneja la descarga automáticamente.
+ *
+ * @param attachmentId - ID del anexo a descargar
+ * @returns void - Inicia la descarga del archivo en el navegador
+ */
+export async function downloadPpaAttachment(attachmentId: string): Promise<void> {
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('auth_token') || ''
+    : '';
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://localhost:5129'}/api/PpaAttachments/download/${attachmentId}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al descargar anexo: ${errorText}`);
+  }
+
+  // Obtener el nombre del archivo del header Content-Disposition
+  const contentDisposition = response.headers.get('Content-Disposition');
+  let fileName = 'archivo'; // Nombre por defecto
+
+  if (contentDisposition) {
+    const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    if (fileNameMatch && fileNameMatch[1]) {
+      fileName = fileNameMatch[1].replace(/['"]/g, '');
+    }
+  }
+
+  // Crear blob y descargar
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+
+  // Limpiar
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 // ============================================================================

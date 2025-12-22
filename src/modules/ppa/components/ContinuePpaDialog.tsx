@@ -279,7 +279,7 @@ export function ContinuePpaDialog({
                       Cambiar Docente Responsable (Opcional)
                     </Label>
                     <Select
-                      value={selectedTeacher || ''}
+                      value={selectedTeacher || undefined}
                       onValueChange={(value) =>
                         setValue('newResponsibleTeacherId', value || null)
                       }
@@ -292,7 +292,6 @@ export function ContinuePpaDialog({
                         <SelectValue placeholder="Mantener responsable actual" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Mantener responsable actual</SelectItem>
                         {teachers.map((teacher) => (
                           <SelectItem key={teacher.id} value={teacher.id}>
                             {teacher.name}

@@ -62,7 +62,7 @@ export default function NewPpaPage() {
       });
 
       alert('PPA creado exitosamente');
-      router.push('/ppa');
+      router.push('/ppa/my');
     } catch (error) {
       console.error('Error al crear PPA:', error);
       alert(
@@ -145,6 +145,7 @@ export default function NewPpaPage() {
           assignments={assignments}
           onSubmit={handleSubmit}
           onCancel={() => router.push('/ppa')}
+          onPeriodChange={setSelectedPeriodId}
           isSubmitting={createMutation.isPending}
         />
       </div>

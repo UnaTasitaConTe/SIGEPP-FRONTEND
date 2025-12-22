@@ -15,7 +15,7 @@
  * Backend: integer enum (0=Proposal, 1=InProgress, 2=Completed, 3=Archived)
  * Frontend: usamos strings por conveniencia
  */
-export type PpaStatus = 'Proposal' | 'InProgress' | 'Completed' | 'Archived';
+export type PpaStatus = 'Proposal' | 'InProgress' | 'Completed' | 'Archived'| 'InContinuing';
 
 /**
  * Mapeo de PpaStatus string (frontend) a number (backend)
@@ -25,6 +25,7 @@ export const PpaStatusToNumber: Record<PpaStatus, number> = {
   InProgress: 1,
   Completed: 2,
   Archived: 3,
+  InContinuing : 4
 };
 
 /**
@@ -35,6 +36,7 @@ export const NumberToPpaStatus: Record<number, PpaStatus> = {
   1: 'InProgress',
   2: 'Completed',
   3: 'Archived',
+  4 : 'InContinuing'
 };
 
 /**
@@ -92,6 +94,7 @@ export const PpaStatusLabels: Record<PpaStatus, string> = {
   InProgress: 'En Progreso',
   Completed: 'Completado',
   Archived: 'Archivado',
+  InContinuing : "En continuación"
 };
 
 /**
@@ -170,8 +173,10 @@ export interface PpaDetailDto {
   students: PpaStudent[]; // Lista de estudiantes con id y nombre
   createdAt: string;
   updatedAt?: string | null;
-  hasContinuation : boolean;
-  isContinuation : boolean;
+  hasContinuation: boolean;
+  isContinuation: boolean;
+  continuationOfPpaId?: string | null; // ID del PPA del cual este es continuación
+  continuedByPpaId?: string | null; // ID del PPA que continúa este
 }
 
 /**
@@ -265,6 +270,22 @@ export interface CreatePpaCommand {
 }
 
 /**
+ * Comando para crear un nuevo PPA como ADMIN
+ * POST /api/Ppa/admin
+ * Permite especificar el docente responsable directamente
+ */
+export interface CreatePpaAdminCommand {
+  title: string; // minLength: 3, maxLength: 300
+  description?: string | null; // maxLength: 3000
+  generalObjective?: string | null; // maxLength: 1000
+  specificObjectives?: string | null; // maxLength: 2000
+  academicPeriodId: string; // UUID
+  responsibleTeacherId: string; // UUID del docente responsable
+  teacherAssignmentIds: string[]; // minItems: 1
+  studentNames?: string[]; // opcional
+}
+
+/**
  * Comando para actualizar un PPA existente
  * PUT /api/Ppa/{id}
  */
@@ -277,6 +298,22 @@ export interface UpdatePpaCommand {
   newResponsibleTeacherId?: string | null; // UUID
   newTeacherAssignmentIds?: string[] | null;
   newStudents?: PpaStudent[] | null; // Array de objetos con id (opcional) y name
+}
+
+/**
+ * Comando para actualizar un PPA existente como ADMIN
+ * PUT /api/Ppa/admin/{id}
+ * Permite control completo sobre el PPA
+ */
+export interface UpdatePpaAdminCommand {
+  id: string; // UUID
+  title: string; // minLength: 3, maxLength: 300
+  description?: string | null; // maxLength: 3000
+  generalObjective?: string | null; // maxLength: 1000
+  specificObjectives?: string | null; // maxLength: 2000
+  responsibleTeacherId: string; // UUID del docente responsable
+  teacherAssignmentIds: string[]; // minItems: 1
+  students: PpaStudent[]; // Array de objetos con id (opcional) y name
 }
 
 /**

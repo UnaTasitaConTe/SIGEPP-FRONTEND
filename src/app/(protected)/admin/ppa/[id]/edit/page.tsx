@@ -16,12 +16,13 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { usePpaDetail, useUpdatePpa, AdminEditPpaForm } from '@/modules/ppa';
-import { useQuery } from '@tanstack/react-query';
+import { usePpaDetail, updatePpaAsAdmin, AdminEditPpaForm } from '@/modules/ppa';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getUsers } from '@/modules/users';
 import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
 import { Button } from '@/components/ui/button';
 import type { UpdatePpaFormData } from '@/modules/ppa/schemas/ppa.schemas';
+import type { PpaStudent } from '@/modules/ppa';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -39,7 +40,10 @@ export default function AdminEditPpaPage({ params }: PageProps) {
     error: ppaError,
   } = usePpaDetail(id);
 
-  const updateMutation = useUpdatePpa();
+  // Usar el endpoint de admin para actualización completa
+  const updateMutation = useMutation({
+    mutationFn: updatePpaAsAdmin,
+  });
 
   // Obtener usuarios para selector de docente
   const { data: users = [] } = useQuery({
@@ -61,10 +65,33 @@ export default function AdminEditPpaPage({ params }: PageProps) {
   // Filtrar solo docentes
   const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
-  // Handler para enviar el formulario
-  const handleSubmit = async (data: UpdatePpaFormData) => {
+  // Handler para enviar el formulario usando el endpoint de admin
+  const handleSubmit = async (data: any) => {
+    // Validar que se haya seleccionado un docente responsable
+    if (!data.responsibleTeacherId) {
+      alert('Debes seleccionar un docente responsable');
+      return;
+    }
+
     try {
-      await updateMutation.mutateAsync(data);
+      // Convertir studentNames a formato PpaStudent si es necesario
+      const students: PpaStudent[] = data.students
+        ? data.students.map((s: any) => ({
+            id: s.id || null,
+            name: s.name,
+          }))
+        : [];
+
+      await updateMutation.mutateAsync({
+        id: id,
+        title: data.title,
+        description: data.description || null,
+        generalObjective: data.generalObjective || null,
+        specificObjectives: data.specificObjectives || null,
+        responsibleTeacherId: data.responsibleTeacherId,
+        teacherAssignmentIds: data.teacherAssignmentIds,
+        students: students,
+      });
 
       alert('PPA actualizado exitosamente');
       router.push(`/ppa/${id}`);

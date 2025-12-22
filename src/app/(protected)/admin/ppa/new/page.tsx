@@ -20,8 +20,8 @@ import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { useAcademicPeriods, useActivePeriod } from '@/modules/academic';
-import { useCreatePpa, useUpdatePpa, AdminCreatePpaForm } from '@/modules/ppa';
-import { useQuery } from '@tanstack/react-query';
+import { createPpaAsAdmin, AdminCreatePpaForm } from '@/modules/ppa';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getUsers } from '@/modules/users';
 import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
 import { Button } from '@/components/ui/button';
@@ -45,8 +45,10 @@ export default function AdminNewPpaPage() {
     queryFn: () => getUsers(),
   });
 
-  const createMutation = useCreatePpa();
-  const updateMutation = useUpdatePpa();
+  // Usar el endpoint de admin directamente
+  const createMutation = useMutation({
+    mutationFn: createPpaAsAdmin,
+  });
 
   // Obtener asignaciones del período seleccionado
   const { data: assignments = [] } = useQuery({
@@ -70,33 +72,25 @@ export default function AdminNewPpaPage() {
   // Filtrar solo docentes
   const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
-  // Handler para enviar el formulario
+  // Handler para enviar el formulario usando el endpoint de admin
   const handleSubmit = async (data: AdminCreatePpaFormData) => {
+    // Validar que se haya seleccionado un docente responsable
+    if (!data.responsibleTeacherId) {
+      alert('Debes seleccionar un docente responsable');
+      return;
+    }
+
     try {
-      // Paso 1: Crear el PPA (el backend asigna al usuario actual como responsable)
-      const createResult = await createMutation.mutateAsync({
+      await createMutation.mutateAsync({
         title: data.title,
         description: data.description || null,
         generalObjective: data.generalObjective || null,
         specificObjectives: data.specificObjectives || null,
         academicPeriodId: data.academicPeriodId,
+        responsibleTeacherId: data.responsibleTeacherId,
         teacherAssignmentIds: data.teacherAssignmentIds,
         studentNames: data.studentNames || [],
       });
-
-      // Paso 2: Si se seleccionó un docente responsable diferente, actualizar
-      if (data.responsibleTeacherId && createResult?.id) {
-        await updateMutation.mutateAsync({
-          id: createResult.id,
-          title: data.title,
-          description: data.description || null,
-          generalObjective: data.generalObjective || null,
-          specificObjectives: data.specificObjectives || null,
-          newResponsibleTeacherId: data.responsibleTeacherId,
-          newTeacherAssignmentIds: null,
-          newStudentNames: null,
-        });
-      }
 
       alert('PPA creado exitosamente');
       router.push('/admin/ppas');
@@ -185,7 +179,8 @@ export default function AdminNewPpaPage() {
           assignments={assignments}
           onSubmit={handleSubmit}
           onCancel={() => router.push('/admin/ppas')}
-          isSubmitting={createMutation.isPending || updateMutation.isPending}
+          onPeriodChange={setSelectedPeriodId}
+          isSubmitting={createMutation.isPending}
         />
       </div>
     </div>

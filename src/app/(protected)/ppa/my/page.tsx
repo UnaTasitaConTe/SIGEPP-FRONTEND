@@ -24,6 +24,8 @@ export default function MyPpasPage() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | undefined>(undefined);
 
   const { data: ppas, isLoading, error } = useMyPpas(selectedPeriodId);
+  const isAdmin = user?.roles?.includes('ADMIN');
+  const isDocente = user?.roles?.includes('DOCENTE');
 
   // Obtener períodos académicos para el filtro
   const { data: periods = [], isLoading: isLoadingPeriods } = useQuery({
@@ -79,12 +81,22 @@ export default function MyPpasPage() {
               Gestiona tus Planes de Preparación Académica
             </p>
           </div>
-          <Link href="/ppa/new">
-            <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
-              <Plus className="mr-2 h-4 w-4" />
-              Crear PPA
-            </Button>
-          </Link>
+          {isDocente &&
+            <Link href="/ppa/new">
+              <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
+                <Plus className="mr-2 h-4 w-4" />
+                Crear PPA
+              </Button>
+            </Link>
+          }
+          {isAdmin &&
+            <Link href="/admin/ppa/new">
+              <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
+                <Plus className="mr-2 h-4 w-4" />
+                Crear PPA
+              </Button>
+            </Link>
+          }
         </div>
 
         {/* Filtro por período */}
@@ -192,12 +204,22 @@ export default function MyPpasPage() {
             <p className="text-gray-600 mb-6">
               Comienza creando tu primer Plan de Preparación Académica
             </p>
-            <Link href="/ppa/new">
-              <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
-                <Plus className="mr-2 h-4 w-4" />
-                Crear mi primer PPA
-              </Button>
-            </Link>
+            {isDocente &&
+              <Link href="/ppa/new">
+                <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear mi primer PPA
+                </Button>
+              </Link>
+            }
+            {isAdmin &&
+              <Link href="/admin/ppa/new">
+                <Button className="bg-[#e30513] hover:bg-[#9c0f06]">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear mi primer PPA
+                </Button>
+              </Link>
+            }
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-4">

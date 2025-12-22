@@ -3,9 +3,8 @@
  * Usa colores corporativos de SIGEPP
  */
 
-import type { PpaStatus } from '../types';
-import { PpaStatusLabels } from '../types';
-import { PpaStatusColors } from '../types/ppa.enums';
+import { PpaStatus, PpaStatusLabels } from '../types';
+import { PpaStatus as ppaStatusEnum, PpaStatusColors } from '../types/ppa.enums';
 
 interface PpaStatusBadgeProps {
   status: PpaStatus;
@@ -18,11 +17,13 @@ const statusToNumber: Record<PpaStatus, number> = {
   InProgress: 1,
   Completed: 2,
   Archived: 3,
-};
+  InContinuing: 4
+} as const satisfies Record<string, number>;
 
 export function PpaStatusBadge({ status, className = '' }: PpaStatusBadgeProps) {
   const label = PpaStatusLabels[status];
-  const colorClass = PpaStatusColors[statusToNumber[status]];
+  const statusEnum = statusToNumber[status] as ppaStatusEnum; // <- PpaStatus
+  const colorClass = PpaStatusColors[statusEnum];
 
   return (
     <span

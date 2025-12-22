@@ -63,7 +63,7 @@ export default function ProtectedLayout({ children }: ProtectedLayoutProps) {
       show: true,
     },
     {
-      href: '/ppa',
+      href: '/ppa/my',
       label: 'Mis PPAs',
       icon: FileText,
       show: !isConsultor,

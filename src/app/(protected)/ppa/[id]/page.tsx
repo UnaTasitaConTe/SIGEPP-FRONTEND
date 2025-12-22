@@ -29,7 +29,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import {
-  getFileDownloadUrl,
+  downloadPpaAttachment,
   usePpaDetail,
   usePpaAttachments,
   useChangePpaStatus,
@@ -77,12 +77,65 @@ export default function PpaDetailPage({ params }: PageProps) {
     error: ppaError,
   } = usePpaDetail(id);
 
-  // Obtener períodos académicos para el diálogo de continuar PPA
-  const { data: periods = [] } = useQuery({
+  // Verificar permisos
+  const isAdmin = user?.roles?.includes('ADMIN');
+  const isPrimaryTeacher = ppa && user?.userId === ppa.primaryTeacherId;
+  const canEdit = isAdmin || isPrimaryTeacher;
+  const canUploadAttachments = isAdmin || user?.roles?.includes('DOCENTE');
+  const canChangeStatus = canEdit;
+
+  // Obtener períodos académicos (necesarios para verificar disponibilidad de continuación)
+  const { data: allPeriodsForCheck = [] } = useQuery({
     queryKey: ['academic-periods'],
     queryFn: () => getAcademicPeriods(),
-    enabled: showContinueDialog,
+    // Cargar siempre si el usuario puede editar
+    enabled: canEdit && !!ppa,
   });
+
+  // Función auxiliar para filtrar períodos posteriores al período actual del PPA
+  const filterFuturePeriods = <T extends { id: string; code?: string | null; name?: string; startDate?: string | null }>(allPeriods: T[]): T[] => {
+    if (!ppa) return [];
+
+    // Buscar el período actual del PPA en la lista
+    const currentPeriod = allPeriods.find(p => p.id === ppa.academicPeriodId);
+
+    if (!currentPeriod) {
+      // Si no encontramos el período actual, no podemos determinar cuáles son posteriores
+      return [];
+    }
+
+    return allPeriods.filter((period) => {
+      // Excluir el período actual del PPA
+      if (period.id === ppa.academicPeriodId) {
+        return false;
+      }
+
+      // Método 1: Comparar por fecha si ambos tienen startDate
+      if (period.startDate && currentPeriod.startDate) {
+        try {
+          return new Date(period.startDate) > new Date(currentPeriod.startDate);
+        } catch (e) {
+          // Si hay error al parsear fechas, continuar con otros métodos
+          console.warn('Error al comparar fechas de períodos:', e);
+        }
+      }
+
+      // Método 2: Comparar por código si existe (formato común: "2024-1", "2024-2", "2025-1")
+      if (period.code && currentPeriod.code) {
+        // Intentar comparación alfabética (funciona para códigos como "2024-1" < "2024-2" < "2025-1")
+        return period.code > currentPeriod.code;
+      }
+
+      // Método 3: Si no se puede determinar con certeza, excluir por seguridad
+      return false;
+    });
+  };
+
+  // Verificar si hay períodos académicos disponibles para continuar
+  const hasAvailablePeriodsForContinue = ppa ? filterFuturePeriods(allPeriodsForCheck).length > 0 : false;
+
+  // Períodos filtrados para mostrar en el diálogo de continuación
+  const periods = filterFuturePeriods(allPeriodsForCheck);
 
   // Obtener asignaciones del período seleccionado para continuar
   const { data: assignmentsForContinue = [] } = useQuery({
@@ -118,24 +171,19 @@ export default function PpaDetailPage({ params }: PageProps) {
     queryClient.invalidateQueries({ queryKey: ['ppas', 'attachments', id] });
   };
 
-  // Handler para descargar un anexo
+  // Handler para descargar un anexo usando el nuevo endpoint
   const handleDownloadAttachment = async (attachment: PpaAttachmentDto) => {
     try {
-      const url = await getFileDownloadUrl(attachment.fileKey);
-      // Abrir en nueva pestaña para descargar
-      window.open(url, '_blank');
+      await downloadPpaAttachment(attachment.id);
     } catch (error) {
       console.error('Error al descargar archivo:', error);
-      alert('Error al descargar el archivo. Intenta de nuevo.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Error al descargar el archivo. Intenta de nuevo.'
+      );
     }
   };
-
-  // Verificar permisos
-  const isAdmin = user?.roles?.includes('ADMIN');
-  const isPrimaryTeacher = ppa && user?.userId === ppa.primaryTeacherId;
-  const canEdit = isAdmin || isPrimaryTeacher;
-  const canUploadAttachments = isAdmin || user?.roles?.includes('DOCENTE');
-  const canChangeStatus = canEdit;
 
   // Handler para cambiar estado
   const handleChangeStatus = async (newStatus: PpaStatus) => {
@@ -236,20 +284,37 @@ export default function PpaDetailPage({ params }: PageProps) {
             <div className="flex items-center gap-3 flex-wrap">
               <PpaStatusBadge status={ppa.status} />
 
-              {ppa.isContinuation && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  <GitBranch className="h-3 w-3 mr-1" />
-                  Continuación
-                </span>
+              {/* Enlace al PPA anterior (del cual este es continuación) */}
+              {ppa.isContinuation && ppa.continuationOfPpaId && (
+                <Link href={`/ppa/${ppa.continuationOfPpaId}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="inline-flex items-center gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    <GitBranch className="h-3 w-3" />
+                    <span className="text-xs font-medium">PPA Anterior</span>
+                  </Button>
+                </Link>
               )}
 
-              {ppa.hasContinuation && (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  Tiene continuación
-                </span>
+              {/* Enlace al PPA siguiente (que continúa este) */}
+              {ppa.hasContinuation && ppa.continuedByPpaId && (
+                <Link href={`/ppa/${ppa.continuedByPpaId}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="inline-flex items-center gap-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:border-green-300"
+                  >
+                    <span className="text-xs font-medium">PPA Siguiente</span>
+                    <GitBranch className="h-3 w-3" />
+                    <ArrowLeft className="h-3 w-3 rotate-180" />
+                  </Button>
+                </Link>
               )}
 
-              {canEdit && ppa.status === 'Completed' && !ppa.hasContinuation && (
+              {canEdit && (ppa.status != "Completed" && ppa.status != 'InContinuing')  && !ppa.hasContinuation && hasAvailablePeriodsForContinue && (
                 <Button
                   onClick={() => setShowContinueDialog(true)}
                   size="sm"
@@ -260,8 +325,28 @@ export default function PpaDetailPage({ params }: PageProps) {
                 </Button>
               )}
 
-              {canEdit && (
+              {canEdit && (ppa.status != "Completed" && ppa.status != 'InContinuing') && !ppa.hasContinuation && !hasAvailablePeriodsForContinue && (
+                <div className="text-xs text-[#3c3c3b]/60 bg-[#f2f2f2] px-3 py-2 rounded-md border border-[#3c3c3b]/10">
+                  No hay períodos académicos posteriores disponibles
+                </div>
+              )}
+
+              {canEdit && isPrimaryTeacher && (ppa.status != "Completed" && ppa.status != 'InContinuing') && (
                 <Link href={`/ppa/${id}/edit`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-[#e30513]/30 text-[#e30513] hover:bg-[#e30513]/5"
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Editar
+                  </Button>
+                </Link>
+              )}
+
+              
+              {canEdit && isAdmin && (ppa.status != "Completed" && ppa.status != 'InContinuing') && (
+                <Link href={`/admin/ppa/${id}/edit`}>
                   <Button
                     variant="outline"
                     size="sm"
@@ -277,7 +362,7 @@ export default function PpaDetailPage({ params }: PageProps) {
         </div>
 
         {/* Cambio de estado */}
-        {canChangeStatus && (
+        {canChangeStatus &&  (ppa.status != "Completed" && ppa.status != 'InContinuing') &&(
           <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-[#630b00] flex items-center gap-2">
@@ -596,10 +681,10 @@ export default function PpaDetailPage({ params }: PageProps) {
         )}
 
         {/* Tab: Anexos */}
-        {activeTab === 'attachments' && (
+        {activeTab === 'attachments' &&  (
           <>
             {/* Formulario de subida de anexos (solo para DOCENTE y ADMIN) */}
-            {canUploadAttachments && (
+            {canUploadAttachments &&  (ppa.status != "Completed" && ppa.status != 'InContinuing') && (
               <div className="mb-6">
                 <UploadAttachmentForm
                   ppaId={id}

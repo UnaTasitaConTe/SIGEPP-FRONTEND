@@ -96,6 +96,7 @@ export default function AdminPpasPage() {
       InProgress: ppas.filter((p) => p.status === 'InProgress').length,
       Completed: ppas.filter((p) => p.status === 'Completed').length,
       Archived: ppas.filter((p) => p.status === 'Archived').length,
+      InContinuing: ppas.filter((p) => p.status === 'InContinuing').length,
     };
 
     return { total, byStatus };
