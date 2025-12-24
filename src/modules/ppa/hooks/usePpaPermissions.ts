@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { PpaStatus } from '../types/ppa.enums';
 import type { PpaSummaryDto, PpaDetailDto } from '../types/ppa.types';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 
@@ -47,8 +46,8 @@ export function usePpaPermissions(
     const isResponsible = responsibleId === user.userId;
 
     const isInEditableState =
-      ppa.status !== PpaStatus.Completed &&
-      ppa.status !== PpaStatus.Archived;
+      ppa.status !== 'Completed' &&
+      ppa.status !== 'Archived';
 
     return {
       // Ver: ADMIN ve todos, DOCENTE solo propios

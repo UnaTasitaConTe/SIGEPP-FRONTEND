@@ -7,23 +7,24 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, Plus, Loader2, AlertCircle, Filter } from 'lucide-react';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUsers } from '@/modules/users';
 import { getSubjects, getAcademicPeriods } from '@/modules/academic';
 import {
-  useAssignmentsByPeriod,
   useAssignTeacher,
   useActivateAssignment,
   useDeactivateAssignment,
   useDeleteAssignment,
 } from '@/modules/teacherAssignments';
 import type { AssignTeacherCommand } from '@/modules/teacherAssignments';
+import { usePagedTeacherAssignments } from '@/modules/teacherAssignments/hooks/usePagedTeacherAssignments';
 import { AssignmentCard } from '@/modules/teacherAssignments/components/AssignmentCard';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Pagination, PaginationInfo } from '@/components/ui/pagination';
 import {
   Select,
   SelectContent,
@@ -47,6 +48,19 @@ export default function TeacherAssignmentsPage() {
     academicPeriodId: '',
   });
 
+  // Paginación - solo si hay período seleccionado
+  const { data, loading, error, setPage, setFilters, refetch } = usePagedTeacherAssignments({
+    pageSize: 12,
+    academicPeriodId: selectedPeriodId || undefined,
+  });
+
+  // Actualizar filtro cuando cambia el período
+  useEffect(() => {
+    if (selectedPeriodId) {
+      setFilters({ academicPeriodId: selectedPeriodId });
+    }
+  }, [selectedPeriodId, setFilters]);
+
   // Queries
   const { data: periods = [] } = useQuery({
     queryKey: ['academic-periods'],
@@ -62,14 +76,6 @@ export default function TeacherAssignmentsPage() {
     queryKey: ['users'],
     queryFn: () => getUsers(),
   });
-
-  const {
-    data: assignments = [],
-    isLoading,
-    error,
-  } = useAssignmentsByPeriod(
-    selectedPeriodId ? { academicPeriodId: selectedPeriodId } : undefined
-  );
 
   // Mutations
   const assignMutation = useAssignTeacher();
@@ -108,6 +114,8 @@ export default function TeacherAssignmentsPage() {
 
     assignMutation.mutate(command, {
       onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
+        refetch();
         setIsCreating(false);
         resetForm();
         alert('Asignación creada correctamente');
@@ -121,11 +129,21 @@ export default function TeacherAssignmentsPage() {
   const handleToggleActive = (id: string, isActive: boolean) => {
     if (isActive) {
       if (confirm('¿Desactivar esta asignación?')) {
-        deactivateMutation.mutate(id);
+        deactivateMutation.mutate(id, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
+            refetch();
+          },
+        });
       }
     } else {
       if (confirm('¿Activar esta asignación?')) {
-        activateMutation.mutate(id);
+        activateMutation.mutate(id, {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
+            refetch();
+          },
+        });
       }
     }
   };
@@ -134,6 +152,8 @@ export default function TeacherAssignmentsPage() {
     if (confirm('¿Eliminar permanentemente esta asignación? Esta acción no se puede deshacer.')) {
       deleteMutation.mutate(id, {
         onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['teacher-assignments'] });
+          refetch();
           alert('Asignación eliminada');
         },
       });
@@ -356,15 +376,13 @@ export default function TeacherAssignmentsPage() {
             </Select>
           </div>
 
-          {selectedPeriodId && (
+          {selectedPeriodId && data && (
             <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
-              <p className="text-sm text-[#3c3c3b]/70">
-                Mostrando{' '}
-                <span className="font-semibold text-[#630b00]">
-                  {assignments.length}
-                </span>{' '}
-                {assignments.length === 1 ? 'asignación' : 'asignaciones'}
-              </p>
+              <PaginationInfo
+                currentPage={data.page}
+                pageSize={data.pageSize}
+                totalItems={data.totalItems}
+              />
             </div>
           )}
         </div>
@@ -386,19 +404,17 @@ export default function TeacherAssignmentsPage() {
 
         {/* Error state */}
         {selectedPeriodId && error && (
-          <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-6 py-4 rounded-xl flex items-start gap-3">
+          <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-6 py-4 rounded-xl flex items-start gap-3 mb-6">
             <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-[#e30513]" />
             <div>
               <p className="font-medium mb-1">Error al cargar asignaciones</p>
-              <p className="text-sm text-[#3c3c3b]/70">
-                No se pudieron cargar las asignaciones. Intenta recargar la página.
-              </p>
+              <p className="text-sm text-[#3c3c3b]/70">{error}</p>
             </div>
           </div>
         )}
 
         {/* Loading state */}
-        {selectedPeriodId && isLoading && (
+        {selectedPeriodId && loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-[#e30513] mx-auto" />
@@ -410,9 +426,9 @@ export default function TeacherAssignmentsPage() {
         )}
 
         {/* Lista de asignaciones */}
-        {selectedPeriodId && !isLoading && !error && (
+        {selectedPeriodId && !loading && !error && data && (
           <>
-            {assignments.length === 0 ? (
+            {data.items.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20 py-12">
                 <div className="text-center">
                   <Users className="h-16 w-16 mx-auto mb-4 text-[#3c3c3b]/30" />
@@ -425,41 +441,52 @@ export default function TeacherAssignmentsPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {assignments.map((assignment) => (
-                  <div key={assignment.id} className="relative">
-                    <AssignmentCard assignment={assignment} />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        onClick={() =>
-                          handleToggleActive(assignment.id, assignment.isActive)
-                        }
-                        size="sm"
-                        variant="outline"
-                        className={
-                          assignment.isActive
-                            ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
-                            : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
-                        }
-                        disabled={
-                          activateMutation.isPending || deactivateMutation.isPending
-                        }
-                      >
-                        {assignment.isActive ? 'Desactivar' : 'Activar'}
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(assignment.id)}
-                        size="sm"
-                        variant="outline"
-                        className="border-red-300 text-red-700 hover:bg-red-50"
-                        disabled={deleteMutation.isPending}
-                      >
-                        Eliminar
-                      </Button>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                  {data.items.map((assignment) => (
+                    <div key={assignment.id} className="relative">
+                      <AssignmentCard assignment={assignment} />
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          onClick={() =>
+                            handleToggleActive(assignment.id, assignment.isActive)
+                          }
+                          size="sm"
+                          variant="outline"
+                          className={
+                            assignment.isActive
+                              ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
+                              : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
+                          }
+                          disabled={
+                            activateMutation.isPending || deactivateMutation.isPending
+                          }
+                        >
+                          {assignment.isActive ? 'Desactivar' : 'Activar'}
+                        </Button>
+                        <Button
+                          onClick={() => handleDelete(assignment.id)}
+                          size="sm"
+                          variant="outline"
+                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          disabled={deleteMutation.isPending}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {/* Paginación */}
+                <Pagination
+                  currentPage={data.page}
+                  totalPages={data.totalPages}
+                  hasPrevious={data.hasPreviousPage}
+                  hasNext={data.hasNextPage}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </>
         )}

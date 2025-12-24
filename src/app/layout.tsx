@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-import localFont from "next/font/local";
 import { Roboto } from "next/font/google";
 
 const geistSans = Geist({
@@ -24,8 +23,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "SIGEPP - Sistema de Gestión de Programas de Pago",
-  description: "Sistema de Gestión de Programas de Pago para la Universidad",
+  title: "SIGEPP - Sistema de Gestión de PPAS",
+  description: "Sistema de Gestión de PPAS para la Universidad FESC",
 };
 
 export default function RootLayout({

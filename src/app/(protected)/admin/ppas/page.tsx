@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Calendar,
@@ -22,10 +22,12 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { useAcademicPeriods, useActivePeriod } from '@/modules/academic';
-import { usePpasByPeriod, PpaStatusLabels, type PpaStatus } from '@/modules/ppa';
+import { PpaStatusLabels, type PpaStatus } from '@/modules/ppa';
+import { usePagedPpas } from '@/modules/ppa/hooks/usePagedPpas';
 import { PpaStatusBadge } from '@/modules/ppa/components/PpaStatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Pagination, PaginationInfo } from '@/components/ui/pagination';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Select,
@@ -42,65 +44,66 @@ export default function AdminPpasPage() {
   const [statusFilter, setStatusFilter] = useState<PpaStatus | 'all'>('all');
 
   // Obtener períodos académicos
-  const { data: periods = [], isLoading: isLoadingPeriods } =
-    useAcademicPeriods();
+  const { data: periods = [], isLoading: isLoadingPeriods } = useAcademicPeriods();
 
   // Obtener período activo
-  const { data: activePeriod, isLoading: isLoadingActivePeriod } =
-    useActivePeriod();
+  const { data: activePeriod, isLoading: isLoadingActivePeriod } = useActivePeriod();
 
   // Establecer período activo como seleccionado por defecto
-  if (activePeriod && !selectedPeriodId && !isLoadingActivePeriod) {
-    setSelectedPeriodId(activePeriod.id);
-  }
+  useEffect(() => {
+    if (activePeriod && !selectedPeriodId && !isLoadingActivePeriod) {
+      setSelectedPeriodId(activePeriod.id);
+    }
+  }, [activePeriod, selectedPeriodId, isLoadingActivePeriod]);
 
-  // Obtener PPAs del período seleccionado
-  const {
-    data: ppas = [],
-    isLoading: isLoadingPpas,
-    error: ppasError,
-  } = usePpasByPeriod(selectedPeriodId);
+  // Paginación con filtros
+  const { data, loading, error, setPage, setSearch, setFilters } = usePagedPpas({
+    pageSize: 10,
+    academicPeriodId: selectedPeriodId || undefined,
+  });
+
+  // Actualizar búsqueda con debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, setSearch]);
+
+  // Actualizar filtros cuando cambian
+  useEffect(() => {
+    const filters: any = { academicPeriodId: selectedPeriodId };
+    if (statusFilter !== 'all') {
+      filters.status = statusFilter;
+    }
+    setFilters(filters);
+  }, [selectedPeriodId, statusFilter, setFilters]);
 
   // Verificar permisos
   const isAdmin = user?.roles?.includes('ADMIN');
   const isConsultor = user?.roles?.includes('CONSULTA_INTERNA');
 
-  // Filtrar PPAs según búsqueda y estado
-  const filteredPpas = useMemo(() => {
-    let filtered = ppas;
-
-    // Filtrar por término de búsqueda
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (ppa) =>
-          ppa.title.toLowerCase().includes(search) ||
-          ppa.description?.toLowerCase().includes(search) ||
-          ppa.teacherPrimaryName?.toLowerCase().includes(search)
-      );
-    }
-
-    // Filtrar por estado
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((ppa) => ppa.status === statusFilter);
-    }
-
-    return filtered;
-  }, [ppas, searchTerm, statusFilter]);
-
-  // Calcular estadísticas
+  // Calcular estadísticas de la página actual
   const stats = useMemo(() => {
-    const total = ppas.length;
-    const byStatus = {
-      Proposal: ppas.filter((p) => p.status === 'Proposal').length,
-      InProgress: ppas.filter((p) => p.status === 'InProgress').length,
-      Completed: ppas.filter((p) => p.status === 'Completed').length,
-      Archived: ppas.filter((p) => p.status === 'Archived').length,
-      InContinuing: ppas.filter((p) => p.status === 'InContinuing').length,
+    if (!data) return { total: 0, byStatus: {} };
+
+    const total = data.totalItems;
+    const byStatus: Record<string, number> = {
+      Proposal: 0,
+      InProgress: 0,
+      Completed: 0,
+      Archived: 0,
+      InContinuing: 0,
     };
 
+    data.items.forEach((ppa) => {
+      if (ppa.status in byStatus) {
+        byStatus[ppa.status]++;
+      }
+    });
+
     return { total, byStatus };
-  }, [ppas]);
+  }, [data]);
 
   // Loading state
   if (isAuthLoading || isLoadingPeriods || isLoadingActivePeriod) {
@@ -179,7 +182,7 @@ export default function AdminPpasPage() {
         </Card>
 
         {/* Estadísticas */}
-        {selectedPeriodId && !isLoadingPpas && (
+        {selectedPeriodId && !loading && data && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <Card className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20">
               <CardContent className="pt-6">
@@ -272,7 +275,7 @@ export default function AdminPpasPage() {
         )}
 
         {/* Filtros y búsqueda */}
-        {selectedPeriodId && !isLoadingPpas && ppas.length > 0 && (
+        {selectedPeriodId && !loading && data && (
           <Card className="mb-6 bg-white rounded-xl shadow-sm border border-[#e30513]/20">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-[#630b00] flex items-center gap-2">
@@ -324,14 +327,31 @@ export default function AdminPpasPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Botón para limpiar filtros */}
+                {(searchTerm || statusFilter !== 'all') && (
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                    }}
+                    className="border-[#e30513]/30 text-[#e30513] hover:bg-[#e30513]/5"
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
               </div>
 
-              {/* Resultados de búsqueda */}
-              {searchTerm || statusFilter !== 'all' ? (
-                <p className="text-sm text-[#3c3c3b]/60 mt-3">
-                  Mostrando {filteredPpas.length} de {ppas.length} PPAs
-                </p>
-              ) : null}
+              {/* Info de paginación */}
+              <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
+                <PaginationInfo
+                  currentPage={data.page}
+                  pageSize={data.pageSize}
+                  totalItems={data.totalItems}
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -339,24 +359,24 @@ export default function AdminPpasPage() {
         {/* Lista de PPAs */}
         {selectedPeriodId && (
           <>
-            {isLoadingPpas ? (
+            {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-[#e30513]" />
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#e30513] mx-auto" />
+                  <p className="mt-3 text-sm text-[#3c3c3b]/60">Cargando PPAs...</p>
+                </div>
               </div>
-            ) : ppasError ? (
+            ) : error ? (
               <div className="bg-[#e30513]/5 border border-[#e30513]/20 text-[#630b00] px-6 py-8 rounded-xl flex items-start gap-3">
                 <AlertCircle className="h-6 w-6 flex-shrink-0 text-[#e30513]" />
                 <div>
                   <h3 className="font-semibold text-lg mb-2">
                     Error al cargar PPAs
                   </h3>
-                  <p className="text-sm text-[#3c3c3b]/70">
-                    No se pudieron cargar los PPAs del período seleccionado.
-                    Intenta de nuevo más tarde.
-                  </p>
+                  <p className="text-sm text-[#3c3c3b]/70">{error}</p>
                 </div>
               </div>
-            ) : filteredPpas.length === 0 ? (
+            ) : !data || data.items.length === 0 ? (
               <Card className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20">
                 <CardContent className="py-12">
                   <div className="text-center text-[#3c3c3b]/60">
@@ -370,66 +390,70 @@ export default function AdminPpasPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
-                {filteredPpas.map((ppa) => (
-                  <Card
-                    key={ppa.id}
-                    className="bg-white rounded-xl shadow-sm border border-[#e30513]/20 hover:border-[#e30513]/40 transition-colors"
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-start gap-3 mb-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-[#e30513] to-[#630b00] rounded-lg flex items-center justify-center flex-shrink-0">
-                              <BookOpen className="h-5 w-5 text-white" />
+              <>
+                <div className="space-y-4 mb-6">
+                  {data.items.map((ppa) => (
+                    <Card
+                      key={ppa.id}
+                      className="bg-white rounded-xl shadow-sm border border-[#e30513]/20 hover:border-[#e30513]/40 transition-colors"
+                    >
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-start gap-3 mb-3">
+                              <div className="w-10 h-10 bg-gradient-to-br from-[#e30513] to-[#630b00] rounded-lg flex items-center justify-center flex-shrink-0">
+                                <BookOpen className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-lg font-semibold text-[#630b00] mb-1">
+                                  {ppa.title}
+                                </h3>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-lg font-semibold text-[#630b00] mb-1">
-                                {ppa.title}
-                              </h3>
-                              {ppa.description && (
-                                <p className="text-sm text-[#3c3c3b]/70 line-clamp-2">
-                                  {ppa.description}
-                                </p>
-                              )}
+
+                            <div className="flex flex-wrap gap-4 text-sm text-[#3c3c3b]/70">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-[#e30513]" />
+                                <span>Docente: {ppa.responsibleTeacherName}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-[#e30513]" />
+                                <span>
+                                  Creado:{' '}
+                                  {new Date(ppa.createdAt).toLocaleDateString('es-ES')}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap gap-4 text-sm text-[#3c3c3b]/70">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-[#e30513]" />
-                              <span>Docente: {ppa.teacherPrimaryName}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-[#e30513]" />
-                              <span>
-                                Creado:{' '}
-                                {new Date(ppa.createdAt).toLocaleDateString(
-                                  'es-ES'
-                                )}
-                              </span>
-                            </div>
+                          <div className="flex items-center gap-3">
+                            <PpaStatusBadge status={ppa.status} />
+                            <Link href={`/ppa/${ppa.id}`}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-[#e30513]/30 text-[#e30513] hover:bg-[#e30513]/5"
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                Ver detalle
+                              </Button>
+                            </Link>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
 
-                        <div className="flex items-center gap-3">
-                          <PpaStatusBadge status={ppa.status} />
-                          <Link href={`/ppa/${ppa.id}`}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-[#e30513]/30 text-[#e30513] hover:bg-[#e30513]/5"
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              Ver detalle
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                {/* Paginación */}
+                <Pagination
+                  currentPage={data.page}
+                  totalPages={data.totalPages}
+                  hasPrevious={data.hasPreviousPage}
+                  hasNext={data.hasNextPage}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </>
         )}

@@ -4,6 +4,8 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
+import { BasePagedService } from '@/services/basePagedService';
+import type { BasePagedParams } from '@/types/common';
 import type {
   UserDto,
   UserDetailDto,
@@ -12,6 +14,33 @@ import type {
   AssignRolesRequest,
   ChangePasswordRequest,
 } from './types';
+
+// ============================================================================
+// PAGINACIÓN - TIPOS Y SERVICIO
+// ============================================================================
+
+/**
+ * Parámetros para consultas paginadas de usuarios
+ * Extiende los parámetros base con filtros específicos de usuarios
+ */
+export interface UserPagedParams extends BasePagedParams {
+  roleCode?: string; // Filtrar por código de rol (ADMIN, DOCENTE, etc.)
+}
+
+/**
+ * Servicio de usuarios con paginación
+ * Extiende del servicio base genérico
+ */
+export class UserService extends BasePagedService<UserDto, UserPagedParams> {
+  constructor() {
+    super('/api/Users');
+  }
+}
+
+/**
+ * Instancia del servicio de usuarios para uso en la aplicación
+ */
+export const userService = new UserService();
 
 // ============================================================================
 // USERS - GESTIÓN DE USUARIOS
@@ -193,6 +222,9 @@ export async function changeUserPassword(
  * API de usuarios - Objeto con todas las funciones exportadas
  */
 export const usersApi = {
+  // Paginación
+  service: userService,
+
   // CRUD básico
   getUsers,
   getUserById,

@@ -5,6 +5,8 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
+import { BasePagedService } from '@/services/basePagedService';
+import type { BasePagedParams } from '@/types/common';
 import type {
   AcademicPeriodDto,
   AcademicPeriodDetailDto,
@@ -16,6 +18,49 @@ import type {
   UpdateSubjectCommand,
   GroupDto,
 } from './types';
+
+// ============================================================================
+// PAGINACIÓN - TIPOS Y SERVICIOS
+// ============================================================================
+
+/**
+ * Parámetros para consultas paginadas de períodos académicos
+ * Usa los parámetros base sin filtros adicionales
+ */
+export interface AcademicPeriodPagedParams extends BasePagedParams {}
+
+/**
+ * Parámetros para consultas paginadas de asignaturas
+ * Usa los parámetros base sin filtros adicionales
+ */
+export interface SubjectPagedParams extends BasePagedParams {}
+
+/**
+ * Servicio de períodos académicos con paginación
+ */
+export class AcademicPeriodService extends BasePagedService<
+  AcademicPeriodDto,
+  AcademicPeriodPagedParams
+> {
+  constructor() {
+    super('/api/AcademicPeriods');
+  }
+}
+
+/**
+ * Servicio de asignaturas con paginación
+ */
+export class SubjectService extends BasePagedService<SubjectDto, SubjectPagedParams> {
+  constructor() {
+    super('/api/Subjects');
+  }
+}
+
+/**
+ * Instancias de servicios para uso en la aplicación
+ */
+export const academicPeriodService = new AcademicPeriodService();
+export const subjectService = new SubjectService();
 
 // ============================================================================
 // ACADEMIC PERIODS - CONSULTAS
@@ -219,6 +264,10 @@ export async function getGroupsByPeriod(periodId: string): Promise<GroupDto[]> {
  * API de módulo académico - Objeto con todas las funciones exportadas
  */
 export const academicApi = {
+  // Paginación
+  academicPeriodService,
+  subjectService,
+
   // Academic Periods
   getAcademicPeriods,
   getActivePeriod,

@@ -7,21 +7,22 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BookOpen, Plus, Loader2, AlertCircle, Search } from 'lucide-react';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  getSubjects,
   createSubject,
   activateSubject,
   deactivateSubject,
 } from '@/modules/academic';
-import type { SubjectDto, CreateSubjectCommand } from '@/modules/academic';
+import type { CreateSubjectCommand } from '@/modules/academic';
+import { usePagedSubjects } from '@/modules/academic/hooks/usePagedSubjects';
 import { SubjectCard } from '@/modules/academic/components/SubjectCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination, PaginationInfo } from '@/components/ui/pagination';
 import {
   Select,
   SelectContent,
@@ -46,17 +47,39 @@ export default function SubjectsPage() {
     description: '',
   });
 
-  // Queries
-  const { data: subjects = [], isLoading, error } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: () => getSubjects(),
+  // Paginación
+  const { data, loading, error, setPage, setSearch, setFilters, refetch } = usePagedSubjects({
+    pageSize: 12,
   });
+
+  // Actualizar búsqueda con debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, setSearch]);
+
+  // Actualizar filtro de estado
+  useEffect(() => {
+    const filters: any = {};
+
+    if (statusFilter === 'active') {
+      filters.isActive = true;
+    } else if (statusFilter === 'inactive') {
+      filters.isActive = false;
+    }
+
+    setFilters(filters);
+  }, [statusFilter, setFilters]);
 
   // Mutations
   const createMutation = useMutation({
     mutationFn: (command: CreateSubjectCommand) => createSubject(command),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      refetch();
       setIsCreating(false);
       resetForm();
       alert('Asignatura creada correctamente');
@@ -70,6 +93,7 @@ export default function SubjectsPage() {
     mutationFn: (id: string) => activateSubject(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      refetch();
       alert('Asignatura activada');
     },
   });
@@ -78,6 +102,7 @@ export default function SubjectsPage() {
     mutationFn: (id: string) => deactivateSubject(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      refetch();
       alert('Asignatura desactivada');
     },
   });
@@ -105,7 +130,7 @@ export default function SubjectsPage() {
     });
   };
 
-  const handleToggleActive = (subject: SubjectDto) => {
+  const handleToggleActive = (subject: any) => {
     if (subject.isActive) {
       if (confirm(`¿Desactivar la asignatura "${subject.name}"?`)) {
         deactivateMutation.mutate(subject.id);
@@ -147,21 +172,6 @@ export default function SubjectsPage() {
       </div>
     );
   }
-
-  // Filter subjects
-  const filteredSubjects = subjects.filter((subject) => {
-    const matchesSearch =
-      subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      subject.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (subject.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && subject.isActive) ||
-      (statusFilter === 'inactive' && !subject.isActive);
-
-    return matchesSearch && matchesStatus;
-  });
 
   return (
     <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
@@ -294,7 +304,7 @@ export default function SubjectsPage() {
                 <Input
                   id="search"
                   type="text"
-                  placeholder="Buscar por código, nombre o descripción..."
+                  placeholder="Buscar por código o nombre..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 border-[#3c3c3b]/20 focus:border-[#e30513]"
@@ -327,17 +337,15 @@ export default function SubjectsPage() {
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
-            <p className="text-sm text-[#3c3c3b]/70">
-              Mostrando{' '}
-              <span className="font-semibold text-[#630b00]">
-                {filteredSubjects.length}
-              </span>{' '}
-              de{' '}
-              <span className="font-semibold text-[#630b00]">{subjects.length}</span>{' '}
-              {subjects.length === 1 ? 'asignatura' : 'asignaturas'}
-            </p>
-          </div>
+          {data && (
+            <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
+              <PaginationInfo
+                currentPage={data.page}
+                pageSize={data.pageSize}
+                totalItems={data.totalItems}
+              />
+            </div>
+          )}
         </div>
 
         {/* Error state */}
@@ -346,15 +354,13 @@ export default function SubjectsPage() {
             <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-[#e30513]" />
             <div>
               <p className="font-medium mb-1">Error al cargar asignaturas</p>
-              <p className="text-sm text-[#3c3c3b]/70">
-                No se pudieron cargar las asignaturas. Intenta recargar la página.
-              </p>
+              <p className="text-sm text-[#3c3c3b]/70">{error}</p>
             </div>
           </div>
         )}
 
         {/* Loading state */}
-        {isLoading && (
+        {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-[#e30513] mx-auto" />
@@ -366,9 +372,9 @@ export default function SubjectsPage() {
         )}
 
         {/* Lista de asignaturas */}
-        {!isLoading && !error && (
+        {!loading && !error && data && (
           <>
-            {filteredSubjects.length === 0 ? (
+            {data.items.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20 py-12">
                 <div className="text-center">
                   <BookOpen className="h-16 w-16 mx-auto mb-4 text-[#3c3c3b]/30" />
@@ -383,30 +389,41 @@ export default function SubjectsPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSubjects.map((subject) => (
-                  <div key={subject.id} className="relative">
-                    <SubjectCard subject={subject} />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        onClick={() => handleToggleActive(subject)}
-                        size="sm"
-                        variant="outline"
-                        className={
-                          subject.isActive
-                            ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
-                            : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
-                        }
-                        disabled={
-                          activateMutation.isPending || deactivateMutation.isPending
-                        }
-                      >
-                        {subject.isActive ? 'Desactivar' : 'Activar'}
-                      </Button>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                  {data.items.map((subject) => (
+                    <div key={subject.id} className="relative">
+                      <SubjectCard subject={subject} />
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          onClick={() => handleToggleActive(subject)}
+                          size="sm"
+                          variant="outline"
+                          className={
+                            subject.isActive
+                              ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
+                              : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
+                          }
+                          disabled={
+                            activateMutation.isPending || deactivateMutation.isPending
+                          }
+                        >
+                          {subject.isActive ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {/* Paginación */}
+                <Pagination
+                  currentPage={data.page}
+                  totalPages={data.totalPages}
+                  hasPrevious={data.hasPreviousPage}
+                  hasNext={data.hasNextPage}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </>
         )}

@@ -4,6 +4,8 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
+import { BasePagedService } from '@/services/basePagedService';
+import type { BasePagedParams } from '@/types/common';
 import type {
   TeacherAssignmentDto,
   AssignTeacherCommand,
@@ -11,6 +13,37 @@ import type {
   GetBySubjectParams,
   GetByPeriodParams,
 } from './types';
+
+// ============================================================================
+// PAGINACIÓN - TIPOS Y SERVICIO
+// ============================================================================
+
+/**
+ * Parámetros para consultas paginadas de asignaciones docente-materia
+ * Extiende los parámetros base con filtros específicos
+ */
+export interface TeacherAssignmentPagedParams extends BasePagedParams {
+  academicPeriodId?: string; // Filtrar por período académico
+  teacherId?: string;        // Filtrar por docente
+  subjectId?: string;        // Filtrar por materia
+}
+
+/**
+ * Servicio de asignaciones docente-materia con paginación
+ */
+export class TeacherAssignmentService extends BasePagedService<
+  TeacherAssignmentDto,
+  TeacherAssignmentPagedParams
+> {
+  constructor() {
+    super('/api/TeacherAssignments');
+  }
+}
+
+/**
+ * Instancia del servicio para uso en la aplicación
+ */
+export const teacherAssignmentService = new TeacherAssignmentService();
 
 // ============================================================================
 // TEACHER ASSIGNMENTS - CONSULTAS
@@ -163,6 +196,9 @@ export async function deleteAssignment(id: string): Promise<void> {
  * API de asignaciones docente-materia - Objeto con todas las funciones exportadas
  */
 export const teacherAssignmentsApi = {
+  // Paginación
+  service: teacherAssignmentService,
+
   // Consultas
   getAssignmentsByTeacher,
   getAssignmentsBySubject,

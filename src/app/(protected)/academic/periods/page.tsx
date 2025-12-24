@@ -7,22 +7,22 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Plus, Loader2, AlertCircle, Search } from 'lucide-react';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  getAcademicPeriods,
   createAcademicPeriod,
-  updateAcademicPeriod,
   activateAcademicPeriod,
   deactivateAcademicPeriod,
 } from '@/modules/academic';
-import type { AcademicPeriodDto, CreateAcademicPeriodCommand } from '@/modules/academic';
+import type { CreateAcademicPeriodCommand } from '@/modules/academic';
+import { usePagedAcademicPeriods } from '@/modules/academic/hooks/usePagedAcademicPeriods';
 import { AcademicPeriodCard } from '@/modules/academic/components/AcademicPeriodCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination, PaginationInfo } from '@/components/ui/pagination';
 import {
   Select,
   SelectContent,
@@ -39,7 +39,6 @@ export default function AcademicPeriodsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isCreating, setIsCreating] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<AcademicPeriodDto | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -49,17 +48,39 @@ export default function AcademicPeriodsPage() {
     endDate: '',
   });
 
-  // Queries
-  const { data: periods = [], isLoading, error } = useQuery({
-    queryKey: ['academic-periods'],
-    queryFn: () => getAcademicPeriods(),
+  // Paginación
+  const { data, loading, error, setPage, setSearch, setFilters, refetch } = usePagedAcademicPeriods({
+    pageSize: 12,
   });
+
+  // Actualizar búsqueda con debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, setSearch]);
+
+  // Actualizar filtro de estado
+  useEffect(() => {
+    const filters: any = {};
+
+    if (statusFilter === 'active') {
+      filters.isActive = true;
+    } else if (statusFilter === 'inactive') {
+      filters.isActive = false;
+    }
+
+    setFilters(filters);
+  }, [statusFilter, setFilters]);
 
   // Mutations
   const createMutation = useMutation({
     mutationFn: (command: CreateAcademicPeriodCommand) => createAcademicPeriod(command),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academic-periods'] });
+      refetch();
       setIsCreating(false);
       resetForm();
       alert('Período académico creado correctamente');
@@ -73,6 +94,7 @@ export default function AcademicPeriodsPage() {
     mutationFn: (id: string) => activateAcademicPeriod(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academic-periods'] });
+      refetch();
       alert('Período activado');
     },
   });
@@ -81,6 +103,7 @@ export default function AcademicPeriodsPage() {
     mutationFn: (id: string) => deactivateAcademicPeriod(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['academic-periods'] });
+      refetch();
       alert('Período desactivado');
     },
   });
@@ -91,7 +114,6 @@ export default function AcademicPeriodsPage() {
   // Handlers
   const resetForm = () => {
     setFormData({ code: '', name: '', startDate: '', endDate: '' });
-    setSelectedPeriod(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -110,7 +132,7 @@ export default function AcademicPeriodsPage() {
     });
   };
 
-  const handleToggleActive = (period: AcademicPeriodDto) => {
+  const handleToggleActive = (period: any) => {
     if (period.isActive) {
       if (confirm(`¿Desactivar el período "${period.name}"?`)) {
         deactivateMutation.mutate(period.id);
@@ -152,20 +174,6 @@ export default function AcademicPeriodsPage() {
       </div>
     );
   }
-
-  // Filter periods
-  const filteredPeriods = periods.filter((period) => {
-    const matchesSearch =
-      period.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      period.code.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && period.isActive) ||
-      (statusFilter === 'inactive' && !period.isActive);
-
-    return matchesSearch && matchesStatus;
-  });
 
   return (
     <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
@@ -347,17 +355,15 @@ export default function AcademicPeriodsPage() {
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
-            <p className="text-sm text-[#3c3c3b]/70">
-              Mostrando{' '}
-              <span className="font-semibold text-[#630b00]">
-                {filteredPeriods.length}
-              </span>{' '}
-              de{' '}
-              <span className="font-semibold text-[#630b00]">{periods.length}</span>{' '}
-              {periods.length === 1 ? 'período' : 'períodos'}
-            </p>
-          </div>
+          {data && (
+            <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
+              <PaginationInfo
+                currentPage={data.page}
+                pageSize={data.pageSize}
+                totalItems={data.totalItems}
+              />
+            </div>
+          )}
         </div>
 
         {/* Error state */}
@@ -366,16 +372,13 @@ export default function AcademicPeriodsPage() {
             <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-[#e30513]" />
             <div>
               <p className="font-medium mb-1">Error al cargar períodos</p>
-              <p className="text-sm text-[#3c3c3b]/70">
-                No se pudieron cargar los períodos académicos. Intenta recargar la
-                página.
-              </p>
+              <p className="text-sm text-[#3c3c3b]/70">{error}</p>
             </div>
           </div>
         )}
 
         {/* Loading state */}
-        {isLoading && (
+        {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-[#e30513] mx-auto" />
@@ -387,9 +390,9 @@ export default function AcademicPeriodsPage() {
         )}
 
         {/* Lista de períodos */}
-        {!isLoading && !error && (
+        {!loading && !error && data && (
           <>
-            {filteredPeriods.length === 0 ? (
+            {data.items.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20 py-12">
                 <div className="text-center">
                   <Calendar className="h-16 w-16 mx-auto mb-4 text-[#3c3c3b]/30" />
@@ -404,30 +407,41 @@ export default function AcademicPeriodsPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPeriods.map((period) => (
-                  <div key={period.id} className="relative">
-                    <AcademicPeriodCard period={period} />
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        onClick={() => handleToggleActive(period)}
-                        size="sm"
-                        variant="outline"
-                        className={
-                          period.isActive
-                            ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
-                            : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
-                        }
-                        disabled={
-                          activateMutation.isPending || deactivateMutation.isPending
-                        }
-                      >
-                        {period.isActive ? 'Desactivar' : 'Activar'}
-                      </Button>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                  {data.items.map((period) => (
+                    <div key={period.id} className="relative">
+                      <AcademicPeriodCard period={period} />
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          onClick={() => handleToggleActive(period)}
+                          size="sm"
+                          variant="outline"
+                          className={
+                            period.isActive
+                              ? 'border-orange-300 text-orange-700 hover:bg-orange-50 flex-1'
+                              : 'border-green-300 text-green-700 hover:bg-green-50 flex-1'
+                          }
+                          disabled={
+                            activateMutation.isPending || deactivateMutation.isPending
+                          }
+                        >
+                          {period.isActive ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {/* Paginación */}
+                <Pagination
+                  currentPage={data.page}
+                  totalPages={data.totalPages}
+                  hasPrevious={data.hasPreviousPage}
+                  hasNext={data.hasNextPage}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </>
         )}

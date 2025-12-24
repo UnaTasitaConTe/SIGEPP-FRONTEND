@@ -7,15 +7,16 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users as UsersIcon, Search, UserPlus, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { useUsers } from '@/modules/users/hooks/useUsers';
+import { usePagedUsers } from '@/modules/users/hooks/usePagedUsers';
 import { UserCard } from '@/modules/users/components/UserCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Pagination, PaginationInfo } from '@/components/ui/pagination';
 import {
   Select,
   SelectContent,
@@ -29,8 +30,32 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
-  // Obtener usuarios
-  const { data: users = [], isLoading, error } = useUsers();
+  // Obtener usuarios con paginación
+  const { data, loading, error, setPage, setSearch, setFilters } = usePagedUsers({
+    pageSize: 12,
+  });
+
+  // Actualizar búsqueda con debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, setSearch]);
+
+  // Actualizar filtro de estado
+  useEffect(() => {
+    const filters: any = {};
+
+    if (statusFilter === 'active') {
+      filters.isActive = true;
+    } else if (statusFilter === 'inactive') {
+      filters.isActive = false;
+    }
+
+    setFilters(filters);
+  }, [statusFilter, setFilters]);
 
   // Verificar que el usuario sea ADMIN
   const isAdmin = currentUser?.roles?.includes('ADMIN');
@@ -65,20 +90,6 @@ export default function UsersPage() {
       </div>
     );
   }
-
-  // Filtrar usuarios según búsqueda y estado
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && user.isActive) ||
-      (statusFilter === 'inactive' && !user.isActive);
-
-    return matchesSearch && matchesStatus;
-  });
 
   return (
     <div className="min-h-screen bg-[#f2f2f2] py-8 px-4">
@@ -158,17 +169,15 @@ export default function UsersPage() {
           </div>
 
           {/* Contador de resultados */}
-          <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
-            <p className="text-sm text-[#3c3c3b]/70">
-              Mostrando{' '}
-              <span className="font-semibold text-[#630b00]">
-                {filteredUsers.length}
-              </span>{' '}
-              de{' '}
-              <span className="font-semibold text-[#630b00]">{users.length}</span>{' '}
-              {users.length === 1 ? 'usuario' : 'usuarios'}
-            </p>
-          </div>
+          {data && (
+            <div className="mt-4 pt-4 border-t border-[#3c3c3b]/10">
+              <PaginationInfo
+                currentPage={data.page}
+                pageSize={data.pageSize}
+                totalItems={data.totalItems}
+              />
+            </div>
+          )}
         </div>
 
         {/* Error state */}
@@ -177,15 +186,13 @@ export default function UsersPage() {
             <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0 text-[#e30513]" />
             <div>
               <p className="font-medium mb-1">Error al cargar usuarios</p>
-              <p className="text-sm text-[#3c3c3b]/70">
-                No se pudieron cargar los usuarios. Intenta recargar la página.
-              </p>
+              <p className="text-sm text-[#3c3c3b]/70">{error}</p>
             </div>
           </div>
         )}
 
         {/* Loading state */}
-        {isLoading && (
+        {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin text-[#e30513] mx-auto" />
@@ -195,9 +202,9 @@ export default function UsersPage() {
         )}
 
         {/* Lista de usuarios */}
-        {!isLoading && !error && (
+        {!loading && !error && data && (
           <>
-            {filteredUsers.length === 0 ? (
+            {data.items.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-[#3c3c3b]/20 py-12">
                 <div className="text-center">
                   <UsersIcon className="h-16 w-16 mx-auto mb-4 text-[#3c3c3b]/30" />
@@ -212,11 +219,22 @@ export default function UsersPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredUsers.map((user) => (
-                  <UserCard key={user.id} user={user} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                  {data.items.map((user) => (
+                    <UserCard key={user.id} user={user} />
+                  ))}
+                </div>
+
+                {/* Paginación */}
+                <Pagination
+                  currentPage={data.page}
+                  totalPages={data.totalPages}
+                  hasPrevious={data.hasPreviousPage}
+                  hasNext={data.hasNextPage}
+                  onPageChange={setPage}
+                />
+              </>
             )}
           </>
         )}

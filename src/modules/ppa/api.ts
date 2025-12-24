@@ -4,6 +4,8 @@
  */
 
 import { apiClient } from '@/lib/apiClient';
+import { BasePagedService } from '@/services/basePagedService';
+import type { BasePagedParams } from '@/types/common';
 import type {
   PpaDto,
   PpaDetailDto,
@@ -25,7 +27,60 @@ import {
   NumberToPpaStatus,
   PpaAttachmentTypeToNumber,
   NumberToPpaAttachmentType,
+  type PpaStatus,
 } from './types';
+
+// ============================================================================
+// PAGINACIÓN - TIPOS Y SERVICIO
+// ============================================================================
+
+/**
+ * Parámetros para consultas paginadas de PPAs
+ * Extiende los parámetros base con filtros específicos de PPAs
+ */
+export interface PpaPagedParams extends BasePagedParams {
+  academicPeriodId?: string;      // Filtrar por período académico
+  status?: PpaStatus;             // Filtrar por estado del PPA
+  responsibleTeacherId?: string;  // Filtrar por docente responsable
+  teacherId?: string;             // Filtrar por docente participante
+}
+
+/**
+ * Servicio de PPAs con paginación
+ */
+export class PpaService extends BasePagedService<PpaSummaryDto, PpaPagedParams> {
+  constructor() {
+    super('/api/Ppa');
+  }
+
+  /**
+   * Override del método getPaged para manejar la conversión de status
+   * de number a string enum
+   */
+  async getPaged(params: PpaPagedParams): Promise<any> {
+    // Si hay status en los parámetros, convertir de enum a number
+    const modifiedParams = { ...params };
+    if (modifiedParams.status !== undefined) {
+      modifiedParams.status = PpaStatusToNumber[modifiedParams.status] as unknown as PpaStatus;
+    }
+
+    const result = await super.getPaged(modifiedParams as any);
+
+    // Convertir status de number a string en los items
+    return {
+      ...result,
+      items: result.items.map((ppa: any) => ({
+        ...ppa,
+        status: NumberToPpaStatus[ppa.status] || 'Proposal',
+      })),
+    };
+  }
+}
+
+/**
+ * Instancia del servicio de PPAs para uso en la aplicación
+ */
+export const ppaService = new PpaService();
 
 // ============================================================================
 // PPA ENDPOINTS

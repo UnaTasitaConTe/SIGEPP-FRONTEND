@@ -1,5 +1,8 @@
 // Generated from OpenAPI spec - align with DocumentacionApi/openapi.Ppa.json
-import { PpaStatus, PpaHistoryActionType, PpaAttachmentType } from './ppa.enums';
+import { PpaHistoryActionType as PpaHistoryActionTypeEnum, PpaAttachmentType as PpaAttachmentTypeEnum } from './ppa.enums';
+
+// Import types from the main types file (string literal unions)
+import type { PpaStatus, PpaHistoryActionType, PpaAttachmentType } from '../types';
 
 // ============================================================================
 // RESPONSE DTOs
