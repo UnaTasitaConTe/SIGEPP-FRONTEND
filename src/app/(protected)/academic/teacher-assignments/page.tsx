@@ -10,9 +10,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Loader2, AlertCircle, Filter } from 'lucide-react';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUsers } from '@/modules/users';
-import { getSubjects, getAcademicPeriods } from '@/modules/academic';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useAssignTeacher,
   useActivateAssignment,
@@ -22,16 +20,12 @@ import {
 import type { AssignTeacherCommand } from '@/modules/teacherAssignments';
 import { usePagedTeacherAssignments } from '@/modules/teacherAssignments/hooks/usePagedTeacherAssignments';
 import { AssignmentCard } from '@/modules/teacherAssignments/components/AssignmentCard';
+import { TeacherCombobox } from '@/modules/teacherAssignments/components/TeacherCombobox';
+import { SubjectCombobox } from '@/modules/teacherAssignments/components/SubjectCombobox';
+import { PeriodCombobox } from '@/modules/teacherAssignments/components/PeriodCombobox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationInfo } from '@/components/ui/pagination';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 export default function TeacherAssignmentsPage() {
@@ -61,22 +55,6 @@ export default function TeacherAssignmentsPage() {
     }
   }, [selectedPeriodId, setFilters]);
 
-  // Queries
-  const { data: periods = [] } = useQuery({
-    queryKey: ['academic-periods'],
-    queryFn: () => getAcademicPeriods(),
-  });
-
-  const { data: subjects = [] } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: () => getSubjects(),
-  });
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => getUsers(),
-  });
-
   // Mutations
   const assignMutation = useAssignTeacher();
   const activateMutation = useActivateAssignment();
@@ -85,9 +63,6 @@ export default function TeacherAssignmentsPage() {
 
   // Verificar admin
   const isAdmin = currentUser?.roles?.includes('ADMIN');
-
-  // Filtrar solo docentes
-  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
   // Handlers
   const resetForm = () => {
@@ -237,81 +212,42 @@ export default function TeacherAssignmentsPage() {
                     <Label htmlFor="period" className="text-[#3c3c3b] font-medium">
                       Período Académico *
                     </Label>
-                    <Select
-                      value={formData.academicPeriodId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, academicPeriodId: value })
-                      }
-                    >
-                      <SelectTrigger
-                        id="period"
-                        className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
-                      >
-                        <SelectValue placeholder="Selecciona período" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {periods.map((period) => (
-                          <SelectItem key={period.id} value={period.id}>
-                            {period.name}
-                            {period.isActive && (
-                              <span className="ml-2 text-xs text-green-600">(Activo)</span>
-                            )}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-1">
+                      <PeriodCombobox
+                        value={formData.academicPeriodId}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, academicPeriodId: value })
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <Label htmlFor="teacher" className="text-[#3c3c3b] font-medium">
                       Docente *
                     </Label>
-                    <Select
-                      value={formData.teacherId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, teacherId: value })
-                      }
-                    >
-                      <SelectTrigger
-                        id="teacher"
-                        className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
-                      >
-                        <SelectValue placeholder="Selecciona docente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teachers.map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-1">
+                      <TeacherCombobox
+                        value={formData.teacherId}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, teacherId: value })
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <Label htmlFor="subject" className="text-[#3c3c3b] font-medium">
                       Asignatura *
                     </Label>
-                    <Select
-                      value={formData.subjectId}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, subjectId: value })
-                      }
-                    >
-                      <SelectTrigger
-                        id="subject"
-                        className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
-                      >
-                        <SelectValue placeholder="Selecciona asignatura" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map((subject) => (
-                          <SelectItem key={subject.id} value={subject.id}>
-                            {subject.code} - {subject.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-1">
+                      <SubjectCombobox
+                        value={formData.subjectId}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, subjectId: value })
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -353,27 +289,12 @@ export default function TeacherAssignmentsPage() {
               <Filter className="h-4 w-4 text-[#e30513]" />
               Filtrar por Período Académico
             </Label>
-            <Select
-              value={selectedPeriodId}
-              onValueChange={setSelectedPeriodId}
-            >
-              <SelectTrigger
-                id="periodFilter"
-                className="mt-2 border-[#3c3c3b]/20 focus:border-[#e30513]"
-              >
-                <SelectValue placeholder="Selecciona un período" />
-              </SelectTrigger>
-              <SelectContent>
-                {periods.map((period) => (
-                  <SelectItem key={period.id} value={period.id}>
-                    {period.name}
-                    {period.isActive && (
-                      <span className="ml-2 text-xs text-green-600">(Activo)</span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="mt-2">
+              <PeriodCombobox
+                value={selectedPeriodId}
+                onValueChange={setSelectedPeriodId}
+              />
+            </div>
           </div>
 
           {selectedPeriodId && data && (
