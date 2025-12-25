@@ -12,38 +12,26 @@ import { Loader2, Save, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { TeacherAssignmentDto } from '@/modules/teacherAssignments';
 import { createPpaSchema, type CreatePpaFormData } from '../schemas/ppa.schemas';
+import { AcademicPeriodCombobox } from './AcademicPeriodCombobox';
+import { TeacherAssignmentPaginatedMultiSelect } from './TeacherAssignmentPaginatedMultiSelect';
 
 interface CreatePpaFormProps {
   /** Períodos académicos disponibles */
   periods: Array<{ id: string; name: string; code?: string | null }>;
-  /** Asignaciones docentes disponibles para el período seleccionado */
-  assignments: Array<TeacherAssignmentDto>;
   /** Callback al enviar el formulario */
   onSubmit: (data: CreatePpaFormData) => void | Promise<void>;
   /** Callback al cancelar */
   onCancel: () => void;
-  /** Callback cuando cambia el período seleccionado - para refrescar asignaciones */
-  onPeriodChange?: (periodId: string) => void;
   /** Estado de envío */
   isSubmitting?: boolean;
 }
 
 export function CreatePpaForm({
   periods,
-  assignments,
   onSubmit,
   onCancel,
-  onPeriodChange,
   isSubmitting = false,
 }: CreatePpaFormProps) {
   const [studentNames, setStudentNames] = useState<string[]>(['']);
@@ -91,18 +79,6 @@ export function CreatePpaForm({
       ...data,
       studentNames: filteredStudents,
     });
-  };
-
-  const toggleAssignment = (assignmentId: string) => {
-    const current = selectedAssignments;
-    if (current.includes(assignmentId)) {
-      setValue(
-        'teacherAssignmentIds',
-        current.filter((id) => id !== assignmentId)
-      );
-    } else {
-      setValue('teacherAssignmentIds', [...current, assignmentId]);
-    }
   };
 
   return (
@@ -230,33 +206,19 @@ export function CreatePpaForm({
             <Label htmlFor="period" className="text-[#3c3c3b] font-medium">
               Período Académico *
             </Label>
-            <Select
-              value={selectedPeriod}
-              onValueChange={(value) => {
-                setValue('academicPeriodId', value);
-                // Limpiar asignaciones seleccionadas cuando cambia el período
-                setValue('teacherAssignmentIds', []);
-                // Notificar a la página para refrescar asignaciones
-                onPeriodChange?.(value);
-              }}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger
-                id="period"
-                className={`mt-1 border-[#3c3c3b]/20 focus:border-[#e30513] ${
-                  errors.academicPeriodId ? 'border-[#e30513]' : ''
-                }`}
-              >
-                <SelectValue placeholder="Selecciona un período" />
-              </SelectTrigger>
-              <SelectContent>
-                {periods.map((period) => (
-                  <SelectItem key={period.id} value={period.id}>
-                    {period.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="mt-1">
+              <AcademicPeriodCombobox
+                periods={periods}
+                value={selectedPeriod}
+                onValueChange={(value) => {
+                  setValue('academicPeriodId', value);
+                  // Limpiar asignaciones seleccionadas cuando cambia el período
+                  setValue('teacherAssignmentIds', []);
+                }}
+                disabled={isSubmitting}
+                className={errors.academicPeriodId ? 'border-[#e30513]' : ''}
+              />
+            </div>
             {errors.academicPeriodId && (
               <p className="text-sm text-[#e30513] mt-1">
                 {errors.academicPeriodId.message}
@@ -271,63 +233,32 @@ export function CreatePpaForm({
             </p>
           </div>
 
-          {/* Asignaciones docentes - solo mostrar si hay período seleccionado */}
-          {selectedPeriod ? (
-            <div>
-              <Label className="text-[#3c3c3b] font-medium">
-                Asignaciones Docentes * (mínimo 1)
-              </Label>
-              {assignments.length === 0 ? (
-                <div className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800">
-                    No hay asignaciones disponibles para este período.
-                    Asegúrate de que existan asignaciones de docentes creadas para el período seleccionado.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto border border-[#3c3c3b]/20 rounded-md p-3">
-                  {assignments.map((assignment) => (
-                    <label
-                      key={assignment.id}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#f2f2f2] cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedAssignments.includes(assignment.id)}
-                        onChange={() => toggleAssignment(assignment.id)}
-                        className="h-4 w-4 text-[#e30513] rounded border-[#3c3c3b]/30 focus:ring-[#e30513]"
-                        disabled={isSubmitting}
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-[#630b00]">
-                          {assignment.subjectCode} - {assignment.subjectName}
-                        </p>
-                        {assignment.teacherName && (
-                          <p className="text-xs text-[#3c3c3b]/60">
-                            {assignment.teacherName}
-                          </p>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-              {errors.teacherAssignmentIds && (
-                <p className="text-sm text-[#e30513] mt-1">
-                  {errors.teacherAssignmentIds.message}
-                </p>
-              )}
+          {/* Asignaciones docentes */}
+          <div>
+            <Label className="text-[#3c3c3b] font-medium">
+              Asignaciones Docentes * (mínimo 1)
+            </Label>
+            <div className="mt-2">
+              <TeacherAssignmentPaginatedMultiSelect
+                academicPeriodId={selectedPeriod}
+                value={selectedAssignments}
+                onValueChange={(value) => setValue('teacherAssignmentIds', value)}
+                disabled={isSubmitting}
+                placeholder="Buscar y seleccionar asignaciones..."
+                className={errors.teacherAssignmentIds ? 'border-[#e30513]' : ''}
+              />
+            </div>
+            {errors.teacherAssignmentIds && (
+              <p className="text-sm text-[#e30513] mt-1">
+                {errors.teacherAssignmentIds.message}
+              </p>
+            )}
+            {!selectedPeriod && (
               <p className="text-xs text-[#3c3c3b]/60 mt-1">
-                Seleccionadas: {selectedAssignments.length}
+                Selecciona primero un período académico
               </p>
-            </div>
-          ) : (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>Selecciona un período académico</strong> para ver las asignaciones de docentes disponibles.
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
 

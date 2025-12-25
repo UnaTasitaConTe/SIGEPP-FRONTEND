@@ -5,25 +5,21 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, GitBranch, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useContinuePpa } from '../hooks/usePpa';
 import { continuePpaSchema, type ContinuePpaFormData } from '../schemas/ppa.schemas';
 import type { PpaSummaryDto } from '../types';
-import { TeacherAssignmentDto } from '@/modules/teacherAssignments';
+import { usePagedTeacherAssignments } from '@/modules/teacherAssignments/hooks/usePagedTeacherAssignments';
+import { AcademicPeriodCombobox } from './AcademicPeriodCombobox';
+import { TeacherCombobox } from './TeacherCombobox';
+import { TeacherAssignmentPaginatedMultiSelect } from './TeacherAssignmentPaginatedMultiSelect';
 
 interface ContinuePpaDialogProps {
   ppa: PpaSummaryDto;
@@ -32,12 +28,6 @@ interface ContinuePpaDialogProps {
   onSuccess?: (newPpaId: string) => void;
   /** Períodos académicos disponibles */
   periods: Array<{ id: string; name: string; code?: string | null }>;
-  /** Asignaciones docentes disponibles para el período seleccionado */
-  assignments: Array<TeacherAssignmentDto>;
-  /** Docentes disponibles (opcional, para cambiar responsable) */
-  teachers?: Array<{ id: string; name: string }>;
-  /** Callback cuando cambia el período seleccionado (para cargar asignaciones) */
-  onPeriodChange?: (periodId: string) => void;
 }
 
 export function ContinuePpaDialog({
@@ -46,11 +36,9 @@ export function ContinuePpaDialog({
   onClose,
   onSuccess,
   periods,
-  assignments,
-  teachers = [],
-  onPeriodChange,
 }: ContinuePpaDialogProps) {
   const [studentNames, setStudentNames] = useState<string[]>(['']);
+  const [selectedResponsibleTeacher, setSelectedResponsibleTeacher] = useState<string>('');
 
   const {
     register,
@@ -75,13 +63,47 @@ export function ContinuePpaDialog({
 
   const selectedPeriod = watch('targetAcademicPeriodId');
   const selectedAssignments = watch('teacherAssignmentIds') || [];
-  const selectedTeacher = watch('newResponsibleTeacherId');
+
+  // Obtener asignaciones del período para extraer docentes únicos
+  const { data: assignmentsData, setFilters } = usePagedTeacherAssignments({
+    pageSize: 100,
+    academicPeriodId: selectedPeriod || '',
+  });
+
+  // Actualizar filtro de período cuando cambia
+  useEffect(() => {
+    if (selectedPeriod) {
+      setFilters({ academicPeriodId: selectedPeriod });
+    } else {
+      setFilters({ academicPeriodId: undefined });
+    }
+  }, [selectedPeriod, setFilters]);
+
+  // Extraer docentes únicos de las asignaciones del período
+  const eligibleTeachers = useMemo(() => {
+    if (!selectedPeriod || !assignmentsData?.items) {
+      return [];
+    }
+
+    const teacherMap = new Map<string, { id: string; name: string }>();
+    assignmentsData.items.forEach((assignment) => {
+      if (assignment.teacherId && assignment.teacherName) {
+        teacherMap.set(assignment.teacherId, {
+          id: assignment.teacherId,
+          name: assignment.teacherName,
+        });
+      }
+    });
+
+    return Array.from(teacherMap.values());
+  }, [selectedPeriod, assignmentsData]);
 
   // Reset form cuando se cierra el diálogo
   useEffect(() => {
     if (!isOpen) {
       reset();
       setStudentNames(['']);
+      setSelectedResponsibleTeacher('');
     }
   }, [isOpen, reset]);
 
@@ -99,24 +121,13 @@ export function ContinuePpaDialog({
     setStudentNames(updated);
   };
 
-  const toggleAssignment = (assignmentId: string) => {
-    const current = selectedAssignments;
-    if (current.includes(assignmentId)) {
-      setValue(
-        'teacherAssignmentIds',
-        current.filter((id) => id !== assignmentId)
-      );
-    } else {
-      setValue('teacherAssignmentIds', [...current, assignmentId]);
-    }
-  };
-
   const handleFormSubmit = (data: ContinuePpaFormData) => {
     // Filtrar nombres vacíos antes de enviar
     const filteredStudents = studentNames.filter(name => name.trim() !== '');
 
     const payload: ContinuePpaFormData = {
       ...data,
+      newResponsibleTeacherId: selectedResponsibleTeacher || null,
       studentNames: filteredStudents.length > 0 ? filteredStudents : undefined,
     };
 
@@ -211,33 +222,20 @@ export function ContinuePpaDialog({
                   <Label htmlFor="period" className="text-[#3c3c3b] font-medium">
                     Período Académico Destino *
                   </Label>
-                  <Select
-                    value={selectedPeriod}
-                    onValueChange={(value) => {
-                      setValue('targetAcademicPeriodId', value);
-                      // Limpiar asignaciones seleccionadas al cambiar período
-                      setValue('teacherAssignmentIds', []);
-                      // Notificar al padre para que cargue las asignaciones del nuevo período
-                      onPeriodChange?.(value);
-                    }}
-                    disabled={isPending}
-                  >
-                    <SelectTrigger
-                      id="period"
-                      className={`mt-1 border-[#3c3c3b]/20 focus:border-[#e30513] ${
-                        errors.targetAcademicPeriodId ? 'border-[#e30513]' : ''
-                      }`}
-                    >
-                      <SelectValue placeholder="Selecciona el período destino" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {periods.map((period) => (
-                        <SelectItem key={period.id} value={period.id}>
-                          {period.code || period.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="mt-1">
+                    <AcademicPeriodCombobox
+                      periods={periods}
+                      value={selectedPeriod}
+                      onValueChange={(value) => {
+                        setValue('targetAcademicPeriodId', value);
+                        // Limpiar asignaciones y docente responsable al cambiar período
+                        setValue('teacherAssignmentIds', []);
+                        setSelectedResponsibleTeacher('');
+                      }}
+                      disabled={isPending}
+                      className={errors.targetAcademicPeriodId ? 'border-[#e30513]' : ''}
+                    />
+                  </div>
                   {errors.targetAcademicPeriodId && (
                     <p className="text-sm text-[#e30513] mt-1">
                       {errors.targetAcademicPeriodId.message}
@@ -273,37 +271,36 @@ export function ContinuePpaDialog({
                 </div>
 
                 {/* Nuevo responsable (opcional) */}
-                {teachers.length > 0 && (
-                  <div>
-                    <Label htmlFor="teacher" className="text-[#3c3c3b] font-medium">
-                      Cambiar Docente Responsable (Opcional)
-                    </Label>
-                    <Select
-                      value={selectedTeacher || undefined}
-                      onValueChange={(value) =>
-                        setValue('newResponsibleTeacherId', value || null)
-                      }
-                      disabled={isPending}
-                    >
-                      <SelectTrigger
-                        id="teacher"
-                        className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
-                      >
-                        <SelectValue placeholder="Mantener responsable actual" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {teachers.map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-[#3c3c3b]/60 mt-1">
-                      Si no se especifica, se mantiene: {ppa.responsibleTeacherName}
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <Label htmlFor="teacher" className="text-[#3c3c3b] font-medium">
+                    Cambiar Docente Responsable (Opcional)
+                  </Label>
+                  {!selectedPeriod ? (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        Selecciona primero un período académico
+                      </p>
+                    </div>
+                  ) : eligibleTeachers.length === 0 ? (
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-800">
+                        No hay docentes con asignaciones en este período
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-1">
+                      <TeacherCombobox
+                        teachers={eligibleTeachers}
+                        value={selectedResponsibleTeacher}
+                        onValueChange={setSelectedResponsibleTeacher}
+                        disabled={isPending}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-[#3c3c3b]/60 mt-1">
+                    Si no se especifica, se mantiene: {ppa.responsibleTeacherName}
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -326,47 +323,26 @@ export function ContinuePpaDialog({
                   <Label className="text-[#3c3c3b] font-medium">
                     Asignaciones * (mínimo 1)
                   </Label>
-                  {assignments.length === 0 ? (
-                    <p className="text-sm text-[#3c3c3b]/60 mt-2">
-                      No hay asignaciones disponibles. Selecciona primero un período
-                      académico.
-                    </p>
-                  ) : (
-                    <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto border border-[#3c3c3b]/20 rounded-md p-3">
-                      {assignments.map((assignment) => (
-                        <label
-                          key={assignment.id}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#f2f2f2] cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedAssignments.includes(assignment.id)}
-                            onChange={() => toggleAssignment(assignment.id)}
-                            className="h-4 w-4 text-[#e30513] rounded border-[#3c3c3b]/30 focus:ring-[#e30513]"
-                            disabled={isPending}
-                          />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-[#630b00]">
-                              {assignment.subjectCode} - {assignment.subjectName}
-                            </p>
-                            {assignment.teacherName && (
-                              <p className="text-xs text-[#3c3c3b]/60">
-                                {assignment.teacherName}
-                              </p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  )}
+                  <div className="mt-2">
+                    <TeacherAssignmentPaginatedMultiSelect
+                      academicPeriodId={selectedPeriod}
+                      value={selectedAssignments}
+                      onValueChange={(value) => setValue('teacherAssignmentIds', value)}
+                      disabled={isPending}
+                      placeholder="Buscar y seleccionar asignaciones..."
+                      className={errors.teacherAssignmentIds ? 'border-[#e30513]' : ''}
+                    />
+                  </div>
                   {errors.teacherAssignmentIds && (
                     <p className="text-sm text-[#e30513] mt-1">
                       {errors.teacherAssignmentIds.message}
                     </p>
                   )}
-                  <p className="text-xs text-[#3c3c3b]/60 mt-1">
-                    Seleccionadas: {selectedAssignments.length}
-                  </p>
+                  {!selectedPeriod && (
+                    <p className="text-xs text-[#3c3c3b]/60 mt-1">
+                      Selecciona primero un período académico
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

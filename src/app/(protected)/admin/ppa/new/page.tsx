@@ -14,16 +14,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
-import { useAcademicPeriods, useActivePeriod } from '@/modules/academic';
+import { useAcademicPeriods } from '@/modules/academic';
 import { createPpaAsAdmin, AdminCreatePpaForm } from '@/modules/ppa';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { getUsers } from '@/modules/users';
-import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import type { CreatePpaFormData } from '@/modules/ppa/schemas/ppa.schemas';
 
@@ -35,42 +32,14 @@ interface AdminCreatePpaFormData extends CreatePpaFormData {
 export default function AdminNewPpaPage() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
 
   // Hooks de React Query
   const { data: periods = [] } = useAcademicPeriods();
-  const { data: activePeriod } = useActivePeriod();
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => getUsers(),
-  });
 
   // Usar el endpoint de admin directamente
   const createMutation = useMutation({
     mutationFn: createPpaAsAdmin,
   });
-
-  // Obtener asignaciones del período seleccionado
-  const { data: assignments = [] } = useQuery({
-    queryKey: ['assignments-by-period', selectedPeriodId],
-    queryFn: () =>
-      selectedPeriodId
-        ? getAssignmentsByPeriod({ academicPeriodId: selectedPeriodId })
-        : Promise.resolve([]),
-    enabled: !!selectedPeriodId,
-  });
-
-  // Establecer período activo por defecto
-  useEffect(() => {
-    if (activePeriod && !selectedPeriodId) {
-      setSelectedPeriodId(activePeriod.id);
-    } else if (!activePeriod && periods.length > 0 && !selectedPeriodId) {
-      setSelectedPeriodId(periods[0].id);
-    }
-  }, [activePeriod, periods, selectedPeriodId]);
-
-  // Filtrar solo docentes
-  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
   // Handler para enviar el formulario usando el endpoint de admin
   const handleSubmit = async (data: AdminCreatePpaFormData) => {
@@ -175,11 +144,8 @@ export default function AdminNewPpaPage() {
         {/* Formulario */}
         <AdminCreatePpaForm
           periods={periods}
-          teachers={teachers}
-          assignments={assignments}
           onSubmit={handleSubmit}
           onCancel={() => router.push('/admin/ppas')}
-          onPeriodChange={setSelectedPeriodId}
           isSubmitting={createMutation.isPending}
         />
       </div>
