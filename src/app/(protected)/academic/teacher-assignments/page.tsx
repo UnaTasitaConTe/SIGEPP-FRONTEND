@@ -8,9 +8,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Loader2, AlertCircle, Filter } from 'lucide-react';
+import { Users, Plus, Loader2, AlertCircle, Filter, Search } from 'lucide-react';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   useAssignTeacher,
   useActivateAssignment,
@@ -20,9 +28,10 @@ import {
 import type { AssignTeacherCommand } from '@/modules/teacherAssignments';
 import { usePagedTeacherAssignments } from '@/modules/teacherAssignments/hooks/usePagedTeacherAssignments';
 import { AssignmentCard } from '@/modules/teacherAssignments/components/AssignmentCard';
-import { TeacherCombobox } from '@/modules/teacherAssignments/components/TeacherCombobox';
-import { SubjectCombobox } from '@/modules/teacherAssignments/components/SubjectCombobox';
-import { PeriodCombobox } from '@/modules/teacherAssignments/components/PeriodCombobox';
+import { TeacherPaginatedCombobox } from '@/modules/teacherAssignments/components/TeacherPaginatedCombobox';
+import { SubjectPaginatedCombobox } from '@/modules/teacherAssignments/components/SubjectPaginatedCombobox';
+import { PeriodPaginatedCombobox } from '@/modules/teacherAssignments/components/PeriodPaginatedCombobox';
+import { usePagedAcademicPeriods } from '@/modules/academic/hooks/usePagedAcademicPeriods';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Pagination, PaginationInfo } from '@/components/ui/pagination';
@@ -34,6 +43,37 @@ export default function TeacherAssignmentsPage() {
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Obtener períodos académicos para seleccionar el más reciente
+  const { data: periodsData } = usePagedAcademicPeriods({
+    pageSize: 100, // Cargar suficientes para obtener el más reciente
+  });
+
+  // Seleccionar automáticamente el período más reciente al cargar
+  useEffect(() => {
+    if (periodsData?.items && periodsData.items.length > 0 && !selectedPeriodId) {
+      const periods = periodsData.items;
+
+      // Ordenar por fecha de inicio (más reciente primero)
+      const sortedPeriods = [...periods].sort((a, b) => {
+        if (a.startDate && b.startDate) {
+          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+        }
+        // Si no hay fecha, ordenar por código
+        if (a.code && b.code) {
+          return b.code.localeCompare(a.code);
+        }
+        return 0;
+      });
+
+      const mostRecent = sortedPeriods[0];
+      if (mostRecent) {
+        setSelectedPeriodId(mostRecent.id);
+      }
+    }
+  }, [periodsData, selectedPeriodId]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -43,17 +83,34 @@ export default function TeacherAssignmentsPage() {
   });
 
   // Paginación - solo si hay período seleccionado
-  const { data, loading, error, setPage, setFilters, refetch } = usePagedTeacherAssignments({
+  const { data, loading, error, setPage, setFilters, setSearch, refetch } = usePagedTeacherAssignments({
     pageSize: 12,
     academicPeriodId: selectedPeriodId || undefined,
   });
 
-  // Actualizar filtro cuando cambia el período
+  // Actualizar búsqueda con debounce
+  useEffect(() => {
+    if (!selectedPeriodId) return;
+
+    const timer = setTimeout(() => {
+      setSearch(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, setSearch, selectedPeriodId]);
+
+  // Actualizar filtros cuando cambia el período o el estado
   useEffect(() => {
     if (selectedPeriodId) {
-      setFilters({ academicPeriodId: selectedPeriodId });
+      const filters: any = { academicPeriodId: selectedPeriodId };
+
+      if (statusFilter !== 'all') {
+        filters.isActive = statusFilter === 'active';
+      }
+
+      setFilters(filters);
     }
-  }, [selectedPeriodId, setFilters]);
+  }, [selectedPeriodId, statusFilter, setFilters]);
 
   // Mutations
   const assignMutation = useAssignTeacher();
@@ -213,7 +270,7 @@ export default function TeacherAssignmentsPage() {
                       Período Académico *
                     </Label>
                     <div className="mt-1">
-                      <PeriodCombobox
+                      <PeriodPaginatedCombobox
                         value={formData.academicPeriodId}
                         onValueChange={(value) =>
                           setFormData({ ...formData, academicPeriodId: value })
@@ -227,7 +284,7 @@ export default function TeacherAssignmentsPage() {
                       Docente *
                     </Label>
                     <div className="mt-1">
-                      <TeacherCombobox
+                      <TeacherPaginatedCombobox
                         value={formData.teacherId}
                         onValueChange={(value) =>
                           setFormData({ ...formData, teacherId: value })
@@ -241,7 +298,7 @@ export default function TeacherAssignmentsPage() {
                       Asignatura *
                     </Label>
                     <div className="mt-1">
-                      <SubjectCombobox
+                      <SubjectPaginatedCombobox
                         value={formData.subjectId}
                         onValueChange={(value) =>
                           setFormData({ ...formData, subjectId: value })
@@ -282,18 +339,72 @@ export default function TeacherAssignmentsPage() {
           </Card>
         )}
 
-        {/* Filtro de período */}
+        {/* Filtros y búsqueda */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-[#e30513]/20 mb-6">
-          <div className="max-w-md">
-            <Label htmlFor="periodFilter" className="text-[#3c3c3b] font-medium mb-2 flex items-center gap-2">
-              <Filter className="h-4 w-4 text-[#e30513]" />
-              Filtrar por Período Académico
-            </Label>
-            <div className="mt-2">
-              <PeriodCombobox
-                value={selectedPeriodId}
-                onValueChange={setSelectedPeriodId}
-              />
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="h-5 w-5 text-[#e30513]" />
+            <h2 className="text-lg font-semibold text-[#630b00]">Filtros y Búsqueda</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Filtro de período */}
+            <div>
+              <Label htmlFor="periodFilter" className="text-[#3c3c3b] font-medium">
+                Período Académico *
+              </Label>
+              <div className="mt-1">
+                <PeriodPaginatedCombobox
+                  value={selectedPeriodId}
+                  onValueChange={(value) => {
+                    setSelectedPeriodId(value);
+                    setSearchTerm('');
+                    setStatusFilter('all');
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Campo de búsqueda */}
+            <div>
+              <Label htmlFor="search" className="text-[#3c3c3b] font-medium">
+                Buscar
+              </Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#3c3c3b]/40" />
+                <Input
+                  id="search"
+                  type="text"
+                  placeholder="Buscar docente o materia..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  disabled={!selectedPeriodId}
+                  className="pl-10 border-[#3c3c3b]/20 focus:border-[#e30513]"
+                />
+              </div>
+            </div>
+
+            {/* Filtro de estado */}
+            <div>
+              <Label htmlFor="statusFilter" className="text-[#3c3c3b] font-medium">
+                Estado
+              </Label>
+              <Select
+                value={statusFilter}
+                onValueChange={(value: 'all' | 'active' | 'inactive') => setStatusFilter(value)}
+                disabled={!selectedPeriodId}
+              >
+                <SelectTrigger
+                  id="statusFilter"
+                  className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="active">Solo Activos</SelectItem>
+                  <SelectItem value="inactive">Solo Inactivos</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
