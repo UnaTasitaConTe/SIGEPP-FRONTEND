@@ -17,9 +17,7 @@ import { ArrowLeft, BookOpen, Loader2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { usePpaDetail, updatePpaAsAdmin, AdminEditPpaForm } from '@/modules/ppa';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { getUsers } from '@/modules/users';
-import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import type { UpdatePpaFormData } from '@/modules/ppa/schemas/ppa.schemas';
 import type { PpaStudent } from '@/modules/ppa';
@@ -44,26 +42,6 @@ export default function AdminEditPpaPage({ params }: PageProps) {
   const updateMutation = useMutation({
     mutationFn: updatePpaAsAdmin,
   });
-
-  // Obtener usuarios para selector de docente
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => getUsers(),
-    enabled: !!ppa, // Solo cargar si hay PPA
-  });
-
-  // Obtener asignaciones del período del PPA
-  const { data: assignments = [] } = useQuery({
-    queryKey: ['assignments-by-period', ppa?.academicPeriodId],
-    queryFn: () =>
-      ppa?.academicPeriodId
-        ? getAssignmentsByPeriod({ academicPeriodId: ppa.academicPeriodId })
-        : Promise.resolve([]),
-    enabled: !!ppa?.academicPeriodId,
-  });
-
-  // Filtrar solo docentes
-  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
   // Handler para enviar el formulario usando el endpoint de admin
   const handleSubmit = async (data: any) => {
@@ -203,8 +181,6 @@ export default function AdminEditPpaPage({ params }: PageProps) {
         {/* Formulario */}
         <AdminEditPpaForm
           ppa={ppa}
-          teachers={teachers}
-          assignments={assignments}
           onSubmit={handleSubmit}
           onCancel={() => router.push(`/ppa/${id}`)}
           isSubmitting={updateMutation.isPending}

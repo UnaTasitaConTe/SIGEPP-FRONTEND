@@ -29,6 +29,7 @@ export default function UsersPage() {
   const { user: currentUser, isLoading: isAuthLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMIN' | 'DOCENTE' | 'CONSULTA_INTERNA'>('all');
 
   // Obtener usuarios con paginación
   const { data, loading, error, setPage, setSearch, setFilters } = usePagedUsers({
@@ -44,18 +45,28 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm, setSearch]);
 
-  // Actualizar filtro de estado
+  // Actualizar filtros de estado y rol
   useEffect(() => {
     const filters: any = {};
 
+    // Filtro de estado
     if (statusFilter === 'active') {
       filters.isActive = true;
     } else if (statusFilter === 'inactive') {
       filters.isActive = false;
+    } else {
+      filters.isActive = undefined; // Limpiar filtro de estado
+    }
+
+    // Filtro de rol
+    if (roleFilter !== 'all') {
+      filters.roleCode = roleFilter;
+    } else {
+      filters.roleCode = undefined; // Limpiar filtro de rol
     }
 
     setFilters(filters);
-  }, [statusFilter, setFilters]);
+  }, [statusFilter, roleFilter, setFilters]);
 
   // Verificar que el usuario sea ADMIN
   const isAdmin = currentUser?.roles?.includes('ADMIN');
@@ -123,7 +134,7 @@ export default function UsersPage() {
 
         {/* Filtros y búsqueda */}
         <div className="bg-white rounded-xl p-6 shadow-sm border border-[#e30513]/20 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Búsqueda */}
             <div>
               <Label htmlFor="search" className="text-[#3c3c3b] font-medium mb-2">
@@ -140,6 +151,32 @@ export default function UsersPage() {
                   className="pl-10 border-[#3c3c3b]/20 focus:border-[#e30513]"
                 />
               </div>
+            </div>
+
+            {/* Filtro de rol */}
+            <div>
+              <Label htmlFor="role" className="text-[#3c3c3b] font-medium mb-2">
+                Rol
+              </Label>
+              <Select
+                value={roleFilter}
+                onValueChange={(value) =>
+                  setRoleFilter(value as 'all' | 'ADMIN' | 'DOCENTE' | 'CONSULTA_INTERNA')
+                }
+              >
+                <SelectTrigger
+                  id="role"
+                  className="border-[#3c3c3b]/20 focus:border-[#e30513]"
+                >
+                  <SelectValue placeholder="Todos los roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los roles</SelectItem>
+                  <SelectItem value="ADMIN">Administradores</SelectItem>
+                  <SelectItem value="DOCENTE">Docentes</SelectItem>
+                  <SelectItem value="CONSULTA_INTERNA">Consulta Interna</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Filtro de estado */}
@@ -212,7 +249,7 @@ export default function UsersPage() {
                     No se encontraron usuarios
                   </h3>
                   <p className="text-sm text-[#3c3c3b]/60">
-                    {searchTerm || statusFilter !== 'all'
+                    {searchTerm || statusFilter !== 'all' || roleFilter !== 'all'
                       ? 'Intenta ajustar los filtros de búsqueda'
                       : 'Aún no hay usuarios en el sistema'}
                   </p>

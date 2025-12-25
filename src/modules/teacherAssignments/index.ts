@@ -42,3 +42,5 @@ export {
   useDeleteAssignment,
   teacherAssignmentsKeys,
 } from './hooks/useTeacherAssignments';
+
+export { usePagedTeacherAssignments } from './hooks/usePagedTeacherAssignments';

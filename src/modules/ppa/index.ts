@@ -122,6 +122,11 @@ export { EditPpaForm } from './components/EditPpaForm';
 // Formularios para ADMIN
 export { AdminCreatePpaForm } from './components/AdminCreatePpaForm';
 export { AdminEditPpaForm } from './components/AdminEditPpaForm';
+// Componentes de búsqueda y selección
+export { AcademicPeriodCombobox } from './components/AcademicPeriodCombobox';
+export { TeacherCombobox } from './components/TeacherCombobox';
+export { TeacherAssignmentMultiSelect } from './components/TeacherAssignmentMultiSelect';
+export { TeacherAssignmentPaginatedMultiSelect } from './components/TeacherAssignmentPaginatedMultiSelect';
 // Mantener compatibilidad con código existente
 // export { PpaForm } from './components/PpaForm';
 // export type { PpaFormData } from './components/PpaForm';

@@ -9,32 +9,23 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Save, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { PpaDetailDto } from '../types';
-import { TeacherAssignmentDto } from '@/modules/teacherAssignments';
 import { updatePpaSchema, type UpdatePpaFormData } from '../schemas/ppa.schemas';
+import { TeacherCombobox } from './TeacherCombobox';
+import { TeacherAssignmentPaginatedMultiSelect } from './TeacherAssignmentPaginatedMultiSelect';
+import { usePagedTeacherAssignments } from '@/modules/teacherAssignments/hooks/usePagedTeacherAssignments';
 
 interface AdminEditPpaFormProps {
   /** Datos del PPA a editar */
   ppa: PpaDetailDto;
-  /** Docentes disponibles */
-  teachers: Array<{ id: string; name: string }>;
-  /** Asignaciones docentes disponibles para el período */
-  assignments: Array<TeacherAssignmentDto>;
   /** Callback al enviar el formulario */
   onSubmit: (data: UpdatePpaFormData) => void | Promise<void>;
   /** Callback al cancelar */
@@ -45,8 +36,6 @@ interface AdminEditPpaFormProps {
 
 export function AdminEditPpaForm({
   ppa,
-  teachers,
-  assignments,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -61,6 +50,19 @@ export function AdminEditPpaForm({
   const [existingStudents, setExistingStudents] = useState<Array<{ id?: string | null; name: string }>>([]);
   const [newStudents, setNewStudents] = useState<Array<{ id?: string | null; name: string }>>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  // Obtener asignaciones del período para extraer docentes únicos
+  const { data: assignmentsData, setFilters } = usePagedTeacherAssignments({
+    pageSize: 100, // Cargar más para tener todos los docentes del período
+    academicPeriodId: ppa.academicPeriodId || '',
+  });
+
+  // Actualizar filtro de período (aunque en edición no cambia)
+  useEffect(() => {
+    if (ppa.academicPeriodId) {
+      setFilters({ academicPeriodId: ppa.academicPeriodId });
+    }
+  }, [ppa.academicPeriodId, setFilters]);
 
   // Inicializar estados
   useEffect(() => {
@@ -128,13 +130,25 @@ export function AdminEditPpaForm({
     setExistingStudents(existingStudents.filter((_, i) => i !== index));
   };
 
-  const toggleAssignment = (assignmentId: string) => {
-    if (newTeacherAssignmentIds.includes(assignmentId)) {
-      setNewTeacherAssignmentIds(newTeacherAssignmentIds.filter(id => id !== assignmentId));
-    } else {
-      setNewTeacherAssignmentIds([...newTeacherAssignmentIds, assignmentId]);
+  // Filtrar docentes elegibles basados en las asignaciones del período
+  const eligibleTeachers = useMemo(() => {
+    if (!assignmentsData?.items || assignmentsData.items.length === 0) {
+      return [];
     }
-  };
+
+    // Extraer docentes únicos de las asignaciones disponibles
+    const teacherMap = new Map<string, { id: string; name: string }>();
+    assignmentsData.items.forEach((assignment) => {
+      if (assignment.teacherId && assignment.teacherName) {
+        teacherMap.set(assignment.teacherId, {
+          id: assignment.teacherId,
+          name: assignment.teacherName,
+        });
+      }
+    });
+
+    return Array.from(teacherMap.values());
+  }, [assignmentsData]);
 
   const handleFormSubmit = (data: UpdatePpaFormData) => {
     // Validar que no haya duplicados antes de enviar
@@ -302,27 +316,24 @@ export function AdminEditPpaForm({
             <Label htmlFor="newResponsibleTeacher" className="text-[#3c3c3b] font-medium">
               Cambiar Docente Responsable (Opcional)
             </Label>
-            <Select
-              value={newResponsibleTeacherId}
-              onValueChange={setNewResponsibleTeacherId}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger
-                id="newResponsibleTeacher"
-                className="mt-1 border-[#3c3c3b]/20 focus:border-[#e30513]"
-              >
-                <SelectValue  placeholder="Mantener responsable actual" />
-              </SelectTrigger>
-              <SelectContent>
-                {teachers.map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {eligibleTeachers.length === 0 ? (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  No hay docentes con asignaciones en este período
+                </p>
+              </div>
+            ) : (
+              <div className="mt-1">
+                <TeacherCombobox
+                  teachers={eligibleTeachers}
+                  value={newResponsibleTeacherId}
+                  onValueChange={setNewResponsibleTeacherId}
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
             <p className="text-xs text-[#3c3c3b]/60 mt-1">
-              Deja vacío para mantener el responsable actual
+              Solo docentes con asignaciones en este período. Deja vacío para mantener el actual
             </p>
           </div>
 
@@ -331,41 +342,15 @@ export function AdminEditPpaForm({
             <Label className="text-[#3c3c3b] font-medium">
               Asignaciones Docentes
             </Label>
-            {assignments.length === 0 ? (
-              <p className="text-sm text-[#3c3c3b]/60 mt-2">
-                No hay asignaciones disponibles para este período
-              </p>
-            ) : (
-              <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto border border-[#3c3c3b]/20 rounded-md p-3">
-                {assignments.map((assignment) => (
-                  <label
-                    key={assignment.id}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#f2f2f2] cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={newTeacherAssignmentIds.includes(assignment.id)}
-                      onChange={() => toggleAssignment(assignment.id)}
-                      className="h-4 w-4 text-[#e30513] rounded border-[#3c3c3b]/30 focus:ring-[#e30513]"
-                      disabled={isSubmitting}
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-[#630b00]">
-                        {assignment.subjectCode} - {assignment.subjectName}
-                      </p>
-                      {assignment.teacherName && (
-                        <p className="text-xs text-[#3c3c3b]/60">
-                          {assignment.teacherName}
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-[#3c3c3b]/60 mt-1">
-              Seleccionadas: {newTeacherAssignmentIds.length}
-            </p>
+            <div className="mt-2">
+              <TeacherAssignmentPaginatedMultiSelect
+                academicPeriodId={ppa.academicPeriodId}
+                value={newTeacherAssignmentIds}
+                onValueChange={setNewTeacherAssignmentIds}
+                disabled={isSubmitting}
+                placeholder="Buscar y seleccionar asignaciones..."
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

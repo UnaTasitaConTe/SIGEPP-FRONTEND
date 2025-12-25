@@ -52,8 +52,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { PpaAttachmentDto } from '@/modules/ppa/types';
-import { getAssignmentsByPeriod } from '@/modules/teacherAssignments';
-import { getUsers } from '@/modules/users';
 import { getAcademicPeriods } from '@/modules/academic';
 
 interface PageProps {
@@ -68,7 +66,6 @@ export default function PpaDetailPage({ params }: PageProps) {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'attachments' | 'history'>('details');
   const [showContinueDialog, setShowContinueDialog] = useState(false);
-  const [selectedPeriodForContinue, setSelectedPeriodForContinue] = useState<string>('');
 
   // Obtener detalle del PPA usando el hook
   const {
@@ -136,25 +133,6 @@ export default function PpaDetailPage({ params }: PageProps) {
 
   // Períodos filtrados para mostrar en el diálogo de continuación
   const periods = filterFuturePeriods(allPeriodsForCheck);
-
-  // Obtener asignaciones del período seleccionado para continuar
-  const { data: assignmentsForContinue = [] } = useQuery({
-    queryKey: ['assignments-by-period', selectedPeriodForContinue],
-    queryFn: () =>
-      selectedPeriodForContinue
-        ? getAssignmentsByPeriod({ academicPeriodId: selectedPeriodForContinue })
-        : Promise.resolve([]),
-    enabled: showContinueDialog && !!selectedPeriodForContinue,
-  });
-
-  // Obtener docentes disponibles (solo para admins)
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => getUsers(),
-    enabled: showContinueDialog ,
-  });
-
-  const teachers = users.filter((u) => u.roles?.includes('DOCENTE'));
 
   // Obtener anexos del PPA usando el hook
   const {
@@ -736,17 +714,12 @@ export default function PpaDetailPage({ params }: PageProps) {
           isOpen={showContinueDialog}
           onClose={() => {
             setShowContinueDialog(false);
-            setSelectedPeriodForContinue('');
           }}
           onSuccess={(newPpaId) => {
             setShowContinueDialog(false);
-            setSelectedPeriodForContinue('');
             router.push(`/ppa/${newPpaId}`);
           }}
           periods={periods}
-          assignments={assignmentsForContinue}
-          teachers={isAdmin ? teachers : undefined}
-          onPeriodChange={setSelectedPeriodForContinue}
         />
       </div>
     </div>
