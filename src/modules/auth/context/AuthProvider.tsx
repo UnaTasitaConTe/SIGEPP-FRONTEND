@@ -37,6 +37,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Recuperar sesión al montar
   useEffect(() => {
     const initAuth = async () => {
+      // Solo acceder a localStorage en el cliente
+      if (typeof window === 'undefined') {
+        setIsLoading(false);
+        return;
+      }
+
       const storedToken = localStorage.getItem(TOKEN_KEY);
 
       if (!storedToken) {
@@ -73,13 +79,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.setItem(TOKEN_KEY, response.token);
         setToken(response.token);
 
-
+        // Obtener datos completos del usuario
         const currentUser = await authApi.getCurrentUser();
-     
-
         setUser(currentUser);
 
-        // Redirigir a dashboard
+        // Esperar a que React procese las actualizaciones de estado
+        // y luego redirigir al dashboard
+        await new Promise(resolve => setTimeout(resolve, 100));
         router.push('/dashboard');
       } catch (error) {
         // Re-lanzar el error para que el componente lo maneje
@@ -94,7 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);
-    location.href = '/login'
+    router.replace('/login');
   }, [router]);
 
   const value: AuthContextValue = {

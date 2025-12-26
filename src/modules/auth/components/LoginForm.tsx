@@ -4,7 +4,7 @@
  * LoginForm - Formulario de inicio de sesión
  */
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,6 +33,19 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
 
   const emailErrorId = useId();
   const passwordErrorId = useId();
+
+  // Preload de la imagen del banner para evitar problemas de hidratación
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = '/FESC-BANNER.webp';
+    document.head.appendChild(link);
+
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
 
   const {
     register,
@@ -64,19 +77,20 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
   };
 
   return (
-<div className="w-full max-w-6xl grid lg:grid-cols-2 gap-0 shadow-2xl rounded-2xl overflow-hidden bg-white lg:min-h-[640px]">
-      {/* Panel Izquierdo - Branding */}
-      <div className="hidden lg:flex flex-col justify-between bg-gradient-to-br from-[#e30513] via-[#9c0f06] to-[#630b00] p-12 text-white relative overflow-hidden">
-        <div className="absolute inset-0">
-          <Image
-            src="/FESC-BANNER.webp"
-            alt="FESC Banner"
-            fill
-            className="object-cover"
-            priority
-          />
+    <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-0 shadow-2xl rounded-2xl overflow-hidden bg-white lg:min-h-[640px]">
+        {/* Panel Izquierdo - Branding */}
+        <div className="hidden lg:flex flex-col justify-between bg-gradient-to-br from-[#e30513] via-[#9c0f06] to-[#630b00] p-12 text-white relative overflow-hidden">
+          <div className="absolute inset-0">
+            <Image
+              src="/FESC-BANNER.webp"
+              alt="FESC Banner"
+              fill
+              className="object-cover"
+              priority
+              sizes="(max-width: 1024px) 0vw, 50vw"
+            />
+          </div>
         </div>
-      </div>
 
       {/* Panel Derecho - Formulario */}
       <div className="p-8 lg:p-12 flex flex-col justify-center">
