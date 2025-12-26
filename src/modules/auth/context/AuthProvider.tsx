@@ -97,11 +97,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Logout
   const logout = useCallback(() => {
+    // Limpiar datos de autenticación
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);
-    router.replace('/login');
-  }, [router]);
+
+    // Usar window.location para forzar recarga completa y limpiar todo el estado
+    // Esto asegura que no haya condiciones de carrera con el router de Next.js
+    window.location.href = '/login';
+  }, []);
 
   const value: AuthContextValue = {
     user,
