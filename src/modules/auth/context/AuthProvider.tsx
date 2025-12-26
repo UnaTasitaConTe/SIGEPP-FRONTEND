@@ -5,7 +5,7 @@
  * Maneja el estado del usuario, login, logout y recuperación de sesión
  */
 
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '../api';
 import type { CurrentUser } from '../types';
@@ -34,8 +34,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // Ref para evitar múltiples inicializaciones
+  const hasInitialized = useRef(false);
+
   // Recuperar sesión al montar
   useEffect(() => {
+    // Evitar múltiples ejecuciones del useEffect
+    if (hasInitialized.current) {
+      return;
+    }
+
     const initAuth = async () => {
       // Solo acceder a localStorage en el cliente
       if (typeof window === 'undefined') {
@@ -47,6 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (!storedToken) {
         setIsLoading(false);
+        hasInitialized.current = true;
         return;
       }
 
@@ -63,6 +72,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setToken(null);
       } finally {
         setIsLoading(false);
+        hasInitialized.current = true;
       }
     };
 
@@ -83,6 +93,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const currentUser = await authApi.getCurrentUser();
         setUser(currentUser);
 
+        // Marcar como inicializado para evitar que el useEffect se ejecute de nuevo
+        hasInitialized.current = true;
+        setIsLoading(false);
+
         // Esperar a que React procese las actualizaciones de estado
         // y luego redirigir al dashboard
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -101,6 +115,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     setToken(null);
+
+    // Resetear flag de inicialización
+    hasInitialized.current = false;
 
     // Usar window.location para forzar recarga completa y limpiar todo el estado
     // Esto asegura que no haya condiciones de carrera con el router de Next.js
